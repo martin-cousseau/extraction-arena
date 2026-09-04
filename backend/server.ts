@@ -22,7 +22,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '100mb' }));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'cybertruck-doc-backend' });
+  res.json({ ok: true, service: 'extraction-arena-backend' });
 });
 
 app.use('/api', extractRouter);
@@ -41,6 +41,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`[backend] Document backend listening on http://localhost:${PORT}`);
+  console.log(`[backend] listening on http://localhost:${PORT}`);
 });
