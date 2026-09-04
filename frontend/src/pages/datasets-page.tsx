@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { RiAddLine, RiDeleteBin6Line } from '@remixicon/react';
+import { RiAddLine, RiArrowRightSLine, RiDeleteBin6Line } from '@remixicon/react';
 import { Button } from '@/components/base/buttons/button';
 import { IconButton } from '@/components/base/buttons/icon-button';
 import {
@@ -49,12 +49,21 @@ export function DatasetsPage() {
               {datasets.map((ds) => (
                 <TableRow
                   key={ds.id}
+                  className="group cursor-pointer"
                   onAction={() => {
                     void selectDataset(ds.id);
                     navigate(`/datasets/${ds.id}`);
                   }}
                 >
-                  <TableCell>{ds.name}</TableCell>
+                  <TableCell>
+                    <span className="flex items-center justify-between gap-2">
+                      <span>{ds.name}</span>
+                      <RiArrowRightSLine
+                        className="size-5 shrink-0 text-foreground-icon-tertiary opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                        aria-hidden
+                      />
+                    </span>
+                  </TableCell>
                   <TableCell className="tabular-nums">{ds.pageCount}</TableCell>
                   <TableCell className="tabular-nums">{ds.fieldCount}</TableCell>
                   <TableCell className="tabular-nums">

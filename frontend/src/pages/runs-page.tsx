@@ -44,7 +44,7 @@ export function RunsPage() {
             </TableHeader>
             <TableBody>
               {runs.map((run) => (
-                <TableRow key={run.id} onAction={() => navigate(`/runs/${run.id}`)}>
+                <TableRow key={run.id} className="cursor-pointer" onAction={() => navigate(`/runs/${run.id}`)}>
                   <TableCell className="tabular-nums">{new Date(run.startedAt).toLocaleString()}</TableCell>
                   <TableCell>{datasets.find((d) => d.id === run.datasetId)?.name ?? run.datasetId.slice(0, 8)}</TableCell>
                   <TableCell>

@@ -129,7 +129,7 @@ export function DashboardPage() {
             </TableHeader>
             <TableBody>
               {runs.slice(0, 8).map((run) => (
-                <TableRow key={run.id} onAction={() => navigate(`/runs/${run.id}`)}>
+                <TableRow key={run.id} className="cursor-pointer" onAction={() => navigate(`/runs/${run.id}`)}>
                   <TableCell>
                     {datasets.find((d) => d.id === run.datasetId)?.name ?? run.datasetId.slice(0, 8)}
                   </TableCell>
