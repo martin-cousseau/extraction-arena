@@ -3,7 +3,7 @@ import type { PipelineDescriptor, PipelineId } from './types';
 export const PIPELINES: Record<PipelineId, PipelineDescriptor> = {
   docai: {
     id: 'docai',
-    label: 'DocAI',
+    label: 'LlamaParse',
     description: 'LlamaExtract agentic parse + extract (native).',
     deprecated: false,
     kind: 'native',
@@ -39,3 +39,6 @@ export const PIPELINE_LIST: PipelineDescriptor[] = [
   PIPELINES.gpt,
   PIPELINES.grok,
 ];
+
+/** Pipelines offered in the launch-run modal. Deprecated vision adapters stay in PIPELINE_LIST. */
+export const LAUNCHABLE_PIPELINES: PipelineDescriptor[] = PIPELINE_LIST.filter((p) => !p.deprecated);

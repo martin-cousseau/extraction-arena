@@ -6,7 +6,7 @@ export type {
   RunRecord,
   PipelineRunInput,
 } from './types';
-export { PIPELINES, PIPELINE_LIST, DEFAULT_PIPELINE_ID } from './registry';
+export { PIPELINES, PIPELINE_LIST, LAUNCHABLE_PIPELINES, DEFAULT_PIPELINE_ID } from './registry';
 export { creditsToUsd, LLAMA_CREDIT_USD_PER_1000 } from './cost';
 export {
   createRunningRecord,

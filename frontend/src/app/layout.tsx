@@ -8,6 +8,7 @@ import {
   RiPulseLine,
 } from '@remixicon/react';
 import { DashboardSidebar, type DashboardNavItem } from '@/components/application/dashboard/dashboard-sidebar';
+import { LaunchRunModal } from '@/components/application/launch-run-modal';
 import { RunNotifications } from '@/components/application/run-notifications';
 import { Breadcrumb, BreadcrumbItem } from '@/components/base/breadcrumb/breadcrumb';
 import { Button } from '@/components/base/buttons/button';
@@ -47,6 +48,7 @@ function Clock() {
 export function AppLayout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [launchOpen, setLaunchOpen] = useState(false);
   const active = useAppStore((s) => s.active);
   const loadCatalog = useAppStore((s) => s.loadCatalog);
   const loadRuns = useAppStore((s) => s.loadRuns);
@@ -139,7 +141,7 @@ export function AppLayout() {
               <Button
                 leadingIcon={RiPlayFill}
                 disabled={!active}
-                onClick={() => void run()}
+                onClick={() => setLaunchOpen(true)}
               >
                 Run Extraction Arena
               </Button>
@@ -153,6 +155,14 @@ export function AppLayout() {
         </main>
       </div>
       <RunNotifications />
+      <LaunchRunModal
+        isOpen={launchOpen}
+        onClose={() => setLaunchOpen(false)}
+        onLaunch={(pipelineId) => {
+          setLaunchOpen(false);
+          void run(pipelineId);
+        }}
+      />
     </div>
   );
 }
