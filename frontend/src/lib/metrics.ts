@@ -6,24 +6,17 @@ import type { GoldenValue } from './dataset';
 import {
   evaluateField,
   resolveFieldConfig,
-  meanPrf,
   scoreBand,
-  DEFAULT_FIELD_CONFIG,
   applyJudgeUplift,
   resolveFieldJudge,
   type FieldEvalConfig,
-  type MatchStrategy,
-  type OptimizationPriority,
   type PRF,
   type FieldEvaluation,
   type JudgeFieldResult,
 } from './evaluation';
 
-export type { MatchStrategy, OptimizationPriority, PRF, FieldEvalConfig };
-export { scoreBand, DEFAULT_FIELD_CONFIG, resolveFieldConfig };
-
-/** @deprecated Use FieldEvalConfig — kept for store/UI compatibility. */
-export type FieldMetricConfig = FieldEvalConfig;
+export type { PRF, FieldEvalConfig };
+export { scoreBand, resolveFieldConfig };
 
 export interface FieldMetricsRow {
   key: string;
@@ -93,21 +86,6 @@ export function buildDashboardRows(
   });
 }
 
-export function computeFieldPRF(
-  modelValue: GoldenValue,
-  goldenValue: GoldenValue,
-  strategy: MatchStrategy,
-  fieldKey = '',
-  listMode?: FieldEvalConfig['listMode']
-): PRF {
-  const config = resolveFieldConfig(fieldKey, {
-    matchStrategy: strategy,
-    ...(listMode ? { listMode } : {}),
-  });
-  const ev = evaluateField(modelValue, goldenValue, fieldKey, config);
-  return { precision: ev.precision, recall: ev.recall, f1: ev.f1 };
-}
-
 export function aggregateRows(
   rows: FieldMetricsRow[],
   view: string
@@ -118,7 +96,6 @@ export function aggregateRows(
     if (!prf) continue;
     prfs.push(prf);
   }
-  // meanPrf expects FieldEvaluation — map PRF-only
   if (prfs.length === 0) return { precision: 0, recall: 0, f1: 0, count: 0 };
   let p = 0;
   let r = 0;
@@ -131,6 +108,3 @@ export function aggregateRows(
   const count = prfs.length;
   return { precision: p / count, recall: r / count, f1: f / count, count };
 }
-
-// Re-export for any code that imported mean helpers
-export { meanPrf };
