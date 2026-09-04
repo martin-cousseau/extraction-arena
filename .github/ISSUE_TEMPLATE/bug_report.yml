@@ -1,0 +1,41 @@
+name: Bug report
+description: Something is broken in the harness, scorer, or UI
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Search existing issues first. Do not paste API keys.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Scoring / evaluation
+        - LlamaParse (DocAI)
+        - Vision adapters
+        - Canonical ingest / gold
+        - UI
+        - Docker / local setup
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: repro
+    attributes:
+      label: Repro
+      description: Branch, Node version, and whether you used Docker or `npm run dev`.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Redact keys. Frontend errors and backend LlamaExtract logs help.

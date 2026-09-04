@@ -83,6 +83,8 @@ interface RescueSheetAdapter {
 | [`adapters/tesla.ts`](./adapters/tesla.ts) | Free-form Tesla / `golden_extraction` mapper |
 | [`vlm.ts`](./vlm.ts) | Model JSON → draft |
 | [`energy.ts`](./energy.ts) | Energy enum normalization |
+| [`extractSchema.ts`](./extractSchema.ts) | Deprecated re-export of LlamaExtract `data_schema` |
+| [`../../pipelines/llamaparse/schema.ts`](../../pipelines/llamaparse/schema.ts) | LlamaExtract JSON Schema subset posted by LlamaParse |
 | [`fixtures/cybertruck-rich-source.json`](./fixtures/cybertruck-rich-source.json) | Example rich-domain gold |
 
 Repo conventions: [`AGENTS.md`](../../../../AGENTS.md).

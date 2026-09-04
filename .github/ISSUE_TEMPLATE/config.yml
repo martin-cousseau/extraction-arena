@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Hugging Face gold dataset
+    url: https://huggingface.co/datasets/martincousseau/Cybertruck-Rescue-Sheet
+    about: Canonical Cybertruck rescue-sheet gold (rescue-sheet-ev-v1.1)
+  - name: Walkthrough video
+    url: https://youtu.be/QXWN8WyvPmI
+    about: Product walkthrough
