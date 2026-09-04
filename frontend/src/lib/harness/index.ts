@@ -6,7 +6,15 @@ export type {
   RunRecord,
   PipelineRunInput,
 } from './types';
-export { PIPELINES, PIPELINE_LIST, LAUNCHABLE_PIPELINES, DEFAULT_PIPELINE_ID } from './registry';
+export {
+  DEFAULT_PIPELINE_ID,
+  getPipeline,
+  isLaunchablePipeline,
+  LAUNCHABLE_PIPELINES,
+  PIPELINE_LIST,
+  PIPELINES,
+  resolveLaunchable,
+} from './registry';
 export { creditsToUsd, LLAMA_CREDIT_USD_PER_1000 } from './cost';
 export {
   createRunningRecord,
@@ -15,3 +23,9 @@ export {
   isCompletedEvalRun,
   type RunProgressPhase,
 } from './run';
+export {
+  isRunRemoved,
+  markRunRemoved,
+  registerInFlightRun,
+  unregisterInFlightRun,
+} from './inflight';

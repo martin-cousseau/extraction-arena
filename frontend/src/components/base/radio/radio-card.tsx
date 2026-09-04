@@ -25,10 +25,20 @@ export interface RadioCardProps extends Omit<AriaRadioProps, "children"> {
   description?: ReactNode;
   /** Optional leading visual (logo, avatar) to the left of the title. */
   leading?: ReactNode;
+  /** When false, the description wraps instead of ellipsizing. Default true. */
+  truncateDescription?: boolean;
   ref?: Ref<HTMLLabelElement>;
 }
 
-export function RadioCard({ className, title, description, leading, ref, ...props }: RadioCardProps) {
+export function RadioCard({
+  className,
+  title,
+  description,
+  leading,
+  truncateDescription = true,
+  ref,
+  ...props
+}: RadioCardProps) {
   return (
     <AriaRadio
       ref={ref}
@@ -52,7 +62,14 @@ export function RadioCard({ className, title, description, leading, ref, ...prop
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="truncate text-body-medium text-text-primary">{title}</span>
               {description !== undefined && description !== null && (
-                <span className="truncate text-body-regular text-text-secondary">{description}</span>
+                <span
+                  className={cx(
+                    "text-body-regular text-text-secondary",
+                    truncateDescription ? "truncate" : "text-wrap",
+                  )}
+                >
+                  {description}
+                </span>
               )}
             </span>
           </span>

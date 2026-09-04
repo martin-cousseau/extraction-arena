@@ -3,7 +3,7 @@ import {
   isEnvelopeKey,
   llamaExtractDataSchema,
   llamaExtractIncompatibilities,
-} from './extractSchema';
+} from './schema';
 
 describe('llamaExtractDataSchema', () => {
   const schema = llamaExtractDataSchema();

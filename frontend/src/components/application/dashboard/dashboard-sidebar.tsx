@@ -131,7 +131,7 @@ export function DashboardSidebar({
   return (
     <aside
       className={cx(
-        "flex h-full shrink-0 flex-col justify-between overflow-hidden",
+        "flex h-full min-h-0 shrink-0 flex-col justify-between overflow-hidden",
         "rounded-3xl border border-border-button-white bg-background-secondary-default shadow-sidebar",
         "transition-[width] duration-300 ease-in-out",
         collapsed ? "w-[60px] px-[11px] py-3" : "w-[260px] p-3",

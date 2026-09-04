@@ -41,6 +41,24 @@ export interface JudgeFieldResult {
   rationale: string;
 }
 
+export type InsightSeverity = 'high' | 'medium' | 'low';
+
+export interface JudgeInsightTheme {
+  title: string;
+  severity: InsightSeverity;
+  fields: string[];
+  detail: string;
+}
+
+/** Run-level qualitative brief from the judge (does not change official scores). */
+export interface JudgeInsights {
+  summary: string;
+  themes: JudgeInsightTheme[];
+  strengths: string[];
+  model: string;
+  promptVersion: string;
+}
+
 /** Snapshot of deterministic scores + judge decision applied (if any). */
 export interface JudgeOverlay {
   verdict: JudgeVerdict;

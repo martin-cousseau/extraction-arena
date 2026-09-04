@@ -1,7 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { createRequestLogger, formatBytes } from '../../lib/log.js';
-import { creditsToUsd, runLlamaExtract, type LlamaExtractConfig } from '../../lib/llamaExtract.js';
+import {
+  creditsToUsd,
+  resolveLlamaExtractTier,
+  runLlamaExtract,
+  type LlamaExtractConfig,
+} from '../../lib/llamaExtract.js';
 
 const router = Router();
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -62,7 +67,7 @@ router.post('/pipelines/docai', upload.single('pdf'), async (req: Request, res: 
   log.log('starting LlamaExtract job', {
     pdfName: req.file.originalname,
     uploadBytes: formatBytes(req.file.size),
-    tier: extra.tier ?? 'agentic',
+    tier: resolveLlamaExtractTier(extra.tier),
   });
 
   const controller = new AbortController();
@@ -79,7 +84,7 @@ router.post('/pipelines/docai', upload.single('pdf'), async (req: Request, res: 
       pdf: req.file.buffer,
       configuration: {
         data_schema: dataSchema,
-        tier: extra.tier ?? 'agentic',
+        tier: resolveLlamaExtractTier(extra.tier),
         extraction_target: extra.extraction_target ?? 'per_doc',
         parse_tier: extra.parse_tier ?? 'agentic',
         cite_sources: extra.cite_sources ?? true,

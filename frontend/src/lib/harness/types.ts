@@ -1,7 +1,8 @@
 import type { Issue } from '../canonical/validate';
 import type { RescueSheetV1Draft } from '../canonical/schema';
 import type { GoldenValue } from '../dataset';
-import type { DatasetEvaluation, JudgeFieldResult } from '../evaluation/types';
+import type { DatasetEvaluation, JudgeFieldResult, JudgeInsights } from '../evaluation/types';
+import type { LlamaExtractTier } from '../../pipelines/llamaparse/tiers';
 
 export type PipelineId = 'docai' | 'glm' | 'gpt' | 'grok';
 
@@ -31,6 +32,8 @@ export interface RunRecord {
   id: string;
   datasetId: string;
   pipelineId: PipelineId;
+  /** LlamaExtract `tier` used for this run. Only set on LlamaParse (`docai`) runs. */
+  extractTier?: LlamaExtractTier;
   status: RunStatus;
   startedAt: number;
   finishedAt: number | null;
@@ -45,6 +48,8 @@ export interface RunRecord {
   evaluation?: DatasetEvaluation;
   fieldMetadata?: unknown;
   judgeResults?: Record<string, JudgeFieldResult>;
+  /** Qualitative brief. Overlay only — never rewrites `evaluation`. */
+  judgeInsights?: JudgeInsights;
   error?: string;
 }
 

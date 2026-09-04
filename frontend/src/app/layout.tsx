@@ -8,7 +8,7 @@ import {
   RiPulseLine,
 } from '@remixicon/react';
 import { DashboardSidebar, type DashboardNavItem } from '@/components/application/dashboard/dashboard-sidebar';
-import { LaunchRunModal } from '@/components/application/launch-run-modal';
+import { LaunchRunModal } from '@/pipelines';
 import { RunNotifications } from '@/components/application/run-notifications';
 import { Breadcrumb, BreadcrumbItem } from '@/components/base/breadcrumb/breadcrumb';
 import { Button } from '@/components/base/buttons/button';
@@ -93,8 +93,8 @@ export function AppLayout() {
   }, [loadCatalog, loadRuns]);
 
   return (
-    <div className="flex min-h-dvh bg-background-full text-text-primary">
-      <aside className="hidden p-3 lg:block">
+    <div className="flex h-dvh overflow-hidden bg-background-full text-text-primary">
+      <aside className="hidden h-full min-h-0 shrink-0 p-3 lg:flex lg:flex-col">
         <DashboardSidebar selected={selected} items={NAV} />
       </aside>
 
@@ -106,14 +106,14 @@ export function AppLayout() {
             aria-label="Close navigation"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 p-3">
+          <div className="absolute inset-y-0 left-0 flex p-3">
             <DashboardSidebar mobile selected={selected} items={NAV} onClose={() => setMobileOpen(false)} />
           </div>
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 px-4 py-3 lg:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <IconButton
               aria-label="Open navigation"
@@ -148,7 +148,7 @@ export function AppLayout() {
             )}
           </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-auto px-4 pb-8 lg:px-6">
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-8 lg:px-6">
           <div className="mx-auto w-full max-w-[1300px]">
             <Outlet />
           </div>
@@ -158,9 +158,9 @@ export function AppLayout() {
       <LaunchRunModal
         isOpen={launchOpen}
         onClose={() => setLaunchOpen(false)}
-        onLaunch={(pipelineId) => {
+        onLaunch={(pipelineId, options) => {
           setLaunchOpen(false);
-          void run(pipelineId);
+          void run(pipelineId, options);
         }}
       />
     </div>

@@ -2,25 +2,19 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/base/buttons/button';
 import { CloseButton } from '@/components/base/buttons/close-button';
-import { RadioCard } from '@/components/base/radio/radio-card';
 import { RadioGroup } from '@/components/base/radio/radio';
-import {
-  DEFAULT_PIPELINE_ID,
-  LAUNCHABLE_PIPELINES,
-  type PipelineId,
-} from '@/lib/harness';
 import { useAppStore } from '@/store';
 import { cx } from '@/utils/cx';
-import { PipelineLogo } from './pipeline-logos';
+import { getPipeline, LAUNCHABLE_PIPELINES, resolveLaunchable } from '../registry';
+import { LlamaParseTierRadios } from '../llamaparse/tier-radios';
+import { resolveLlamaExtractTier, type LlamaExtractTier } from '../llamaparse/tiers';
+import type { PipelineId } from '../types';
+import { PipelineCard } from './pipeline-card';
 
 export interface LaunchRunModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLaunch: (pipelineId: PipelineId) => void;
-}
-
-function resolveLaunchable(id: PipelineId): PipelineId {
-  return LAUNCHABLE_PIPELINES.some((p) => p.id === id) ? id : DEFAULT_PIPELINE_ID;
+  onLaunch: (pipelineId: PipelineId, options?: { llamaTier?: LlamaExtractTier }) => void;
 }
 
 /**
@@ -38,17 +32,24 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
 
   const active = useAppStore((s) => s.active);
   const setSelectedPipeline = useAppStore((s) => s.setSelectedPipeline);
+  const setLlamaExtractTier = useAppStore((s) => s.setLlamaExtractTier);
   const [pipelineId, setPipelineId] = useState<PipelineId>(() =>
     resolveLaunchable(useAppStore.getState().selectedPipeline),
   );
+  const [llamaTier, setLlamaTier] = useState<LlamaExtractTier>(() =>
+    resolveLlamaExtractTier(useAppStore.getState().llamaExtractTier),
+  );
 
+  const selected = getPipeline(resolveLaunchable(pipelineId));
   const hasPdf = Boolean(active?.pdfBlob);
+  const canLaunch = !selected.requiresPdf || hasPdf;
   const datasetName = active?.name ?? 'this dataset';
 
   useEffect(() => {
     if (isOpen) {
       if (unmountTimer.current) clearTimeout(unmountTimer.current);
       setPipelineId(resolveLaunchable(useAppStore.getState().selectedPipeline));
+      setLlamaTier(resolveLlamaExtractTier(useAppStore.getState().llamaExtractTier));
       setMounted(true);
       requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
     } else {
@@ -73,10 +74,13 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
   if (!mounted || typeof document === 'undefined') return null;
 
   const launch = () => {
-    if (!hasPdf) return;
     const id = resolveLaunchable(pipelineId);
+    const pipeline = getPipeline(id);
+    if (pipeline.requiresPdf && !hasPdf) return;
     setSelectedPipeline(id);
-    onLaunch(id);
+    const tier = id === 'docai' ? llamaTier : undefined;
+    if (tier) setLlamaExtractTier(tier);
+    onLaunch(id, tier ? { llamaTier: tier } : undefined);
   };
 
   return createPortal(
@@ -103,11 +107,9 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
-          aria-describedby={hasPdf ? descId : `${descId} ${hintId}`}
+          aria-describedby={canLaunch ? descId : `${descId} ${hintId}`}
           tabIndex={-1}
-          className={cx(
-            'relative w-[440px] max-w-[calc(100vw-32px)] overflow-clip rounded-3xl bg-background-full shadow-xs outline-none',
-          )}
+          className="relative w-[440px] max-w-[calc(100vw-32px)] overflow-clip rounded-3xl bg-background-full shadow-xs outline-none"
         >
           <form
             onSubmit={(event) => {
@@ -129,23 +131,27 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
 
               <RadioGroup
                 aria-label="Pipeline"
+                name="pipeline"
                 value={pipelineId}
                 onChange={(value) => setPipelineId(value as PipelineId)}
               >
                 {LAUNCHABLE_PIPELINES.map((pipeline) => (
-                  <RadioCard
+                  <PipelineCard
                     key={pipeline.id}
-                    value={pipeline.id}
-                    leading={<PipelineLogo pipelineId={pipeline.id} />}
-                    title={pipeline.label}
-                    description={pipeline.description}
-                  />
+                    pipeline={pipeline}
+                    selected={pipelineId === pipeline.id}
+                  >
+                    {pipeline.id === 'docai' ? (
+                      <LlamaParseTierRadios value={llamaTier} onChange={setLlamaTier} />
+                    ) : null}
+                  </PipelineCard>
                 ))}
               </RadioGroup>
 
-              {!hasPdf ? (
+              {selected.requiresPdf && !hasPdf ? (
                 <p id={hintId} className="text-body-regular text-text-error-primary">
-                  This dataset has no original PDF. Re-upload it on the dataset page to run LlamaParse.
+                  This dataset has no original PDF. Re-upload it on the dataset page to run{' '}
+                  {selected.label}.
                 </p>
               ) : null}
             </div>
@@ -154,7 +160,7 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
               <Button variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={!hasPdf}>
+              <Button type="submit" disabled={!canLaunch}>
                 Launch
               </Button>
             </div>

@@ -1,5 +1,4 @@
 import { useId } from 'react';
-import type { PipelineId } from '@/lib/harness';
 import { cx } from '@/utils/cx';
 
 /**
@@ -7,7 +6,7 @@ import { cx } from '@/utils/cx';
  * https://www.llamaindex.ai/brand/llamaparse.svg (brand guidelines).
  * Wordmark letters are omitted so the card can use BoardUI type.
  */
-export function LlamaParseMark({ className }: { className?: string }) {
+function LlamaParseMark({ className }: { className?: string }) {
   const uid = useId().replace(/:/g, '');
   const gid = (n: number) => `${uid}-lp-${n}`;
   return (
@@ -70,7 +69,15 @@ export function LlamaParseMark({ className }: { className?: string }) {
   );
 }
 
-export function PipelineLogo({ pipelineId }: { pipelineId: PipelineId }) {
-  if (pipelineId === 'docai') return <LlamaParseMark />;
-  return null;
+export function LlamaParseLogo({ className }: { className?: string }) {
+  return (
+    <span
+      className={cx(
+        'flex size-10 shrink-0 items-center justify-center rounded-2lg bg-background-secondary-default',
+        className,
+      )}
+    >
+      <LlamaParseMark className="size-7" />
+    </span>
+  );
 }

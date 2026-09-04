@@ -4,14 +4,17 @@ import {
   GPT_PRICING,
   GROK_PRICING,
   type VisionConfig,
-} from '../../api';
-import { buildCanonicalPrompt } from '../../canonical/prompt';
-import type { RescueSheetV1 } from '../../canonical/schema';
-import type { SourceContext } from '../../canonical/adapters/types';
-import type { PipelineId, PipelineRunInput, RunUsage } from '../types';
+} from '@/lib/api';
+import { buildCanonicalPrompt } from '@/lib/canonical/prompt';
+import type { RescueSheetV1 } from '@/lib/canonical/schema';
+import type { SourceContext } from '@/lib/canonical/adapters/types';
+import type { PipelineId, PipelineRunInput, RunUsage } from '@/lib/harness/types';
+import type { PipelineExtractOptions, PipelineExtractOutcome } from '../types';
+
+type VisionId = Exclude<PipelineId, 'docai'>;
 
 const VISION_CONFIG: Record<
-  Exclude<PipelineId, 'docai'>,
+  VisionId,
   Omit<VisionConfig, 'apiKey'> & { keyField: 'zaiKey' | 'openaiKey' | 'xaiKey' }
 > = {
   glm: {
@@ -37,19 +40,13 @@ const VISION_CONFIG: Record<
   },
 };
 
-export interface VisionAdapterKeys {
-  zaiKey: string;
-  openaiKey: string;
-  xaiKey: string;
-}
-
-export async function runVisionAdapter(
-  pipelineId: Exclude<PipelineId, 'docai'>,
+export async function runVisionExtract(
+  pipelineId: VisionId,
   input: PipelineRunInput,
-  keys: VisionAdapterKeys
-) {
+  options: PipelineExtractOptions
+): Promise<PipelineExtractOutcome> {
   const spec = VISION_CONFIG[pipelineId];
-  const apiKey = keys[spec.keyField];
+  const apiKey = options.visionKeys[spec.keyField];
   if (!apiKey.trim()) {
     throw new Error(`Missing API key for ${spec.label}.`);
   }
@@ -81,7 +78,12 @@ export async function runVisionAdapter(
   };
 
   return {
-    ...extracted,
+    extractResult: extracted.data,
+    elapsedMs: extracted.elapsedMs,
+    rawText: extracted.rawText,
+    draft: extracted.draft,
+    validationIssues: extracted.validationIssues,
+    data: extracted.data,
     usage,
   };
 }

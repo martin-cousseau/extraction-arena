@@ -5,8 +5,8 @@ import type { SourceContext } from '../canonical/adapters/types';
 import type { GoldenDataset, GoldenValue } from '../dataset';
 import { evaluateDataset } from '../evaluation';
 import type { FieldEvalConfig } from '../evaluation/types';
-import { runDocaiAdapter, type DocaiAdapterOptions } from './adapters/docai';
-import { runVisionAdapter, type VisionAdapterKeys } from './adapters/vision';
+import { getPipeline } from '../../pipelines/registry';
+import type { LlamaExtractTier } from '../../pipelines/llamaparse/tiers';
 import type { PipelineId, PipelineRunInput, RunRecord } from './types';
 
 /** Live pipeline stages. Every adapter extracts, then the harness scores. */
@@ -17,8 +17,12 @@ export interface HarnessRunOptions {
   input: PipelineRunInput;
   configMap: Record<string, Partial<FieldEvalConfig>>;
   golden: GoldenDataset;
-  visionKeys: VisionAdapterKeys;
-  docai?: DocaiAdapterOptions;
+  visionKeys: {
+    zaiKey: string;
+    openaiKey: string;
+    xaiKey: string;
+  };
+  docai?: { apiKeyOverride?: string; tier?: LlamaExtractTier };
   onPhase?: (phase: RunProgressPhase) => void | Promise<void>;
 }
 
@@ -38,12 +42,14 @@ function newId(): string {
 
 export function createRunningRecord(
   datasetId: string,
-  pipelineId: PipelineId
+  pipelineId: PipelineId,
+  extractTier?: LlamaExtractTier
 ): RunRecord {
   return {
     id: newId(),
     datasetId,
     pipelineId,
+    extractTier: pipelineId === 'docai' ? extractTier : undefined,
     status: 'running',
     startedAt: Date.now(),
     finishedAt: null,
@@ -66,46 +72,41 @@ export async function executePipelineRun(options: HarnessRunOptions): Promise<Om
 
   await onPhase?.('extracting');
 
-  if (pipelineId === 'docai') {
-    const extracted = await runDocaiAdapter(input, options.docai);
-    await onPhase?.('evaluating');
-    const draft = normalizeVlmToDraft(extracted.extractResult, ctx);
-    const validation = validate(draft);
-    const data = flattenProjection(project(draft));
-    const evaluation = evaluateDataset(data, golden, configMap);
-    return {
-      datasetId: input.datasetId,
-      pipelineId,
-      status: 'completed',
-      finishedAt: Date.now(),
-      elapsedMs: extracted.elapsedMs,
-      usage: extracted.usage,
-      jobId: extracted.jobId,
-      raw: extracted.extractResult,
-      rawText: extracted.rawText,
-      draft,
-      validationIssues: validation.issues,
-      data,
-      evaluation,
-      fieldMetadata: extracted.extractMetadata,
-    };
+  const pipeline = getPipeline(pipelineId);
+  if (pipeline.requiresPdf && !input.pdfBlob) {
+    throw new Error(
+      `${pipeline.label} needs the original PDF. Re-upload the source file on the dataset page.`
+    );
   }
 
-  const extracted = await runVisionAdapter(pipelineId, input, options.visionKeys);
+  const extracted = await pipeline.extract(input, {
+    llamaKey: options.docai?.apiKeyOverride,
+    llamaTier: options.docai?.tier,
+    visionKeys: options.visionKeys,
+  });
+
   await onPhase?.('evaluating');
-  const evaluation = evaluateDataset(extracted.data, golden, configMap);
+  const draft = extracted.draft ?? normalizeVlmToDraft(extracted.extractResult, ctx);
+  const validationIssues = extracted.validationIssues ?? validate(draft).issues;
+  const data = extracted.data ?? flattenProjection(project(draft));
+  const evaluation = evaluateDataset(data, golden, configMap);
+
   return {
     datasetId: input.datasetId,
-    pipelineId,
+    pipelineId: pipeline.id,
+    extractTier: pipelineId === 'docai' ? options.docai?.tier : undefined,
     status: 'completed',
     finishedAt: Date.now(),
-    elapsedMs: Date.now() - startedAt,
+    elapsedMs: extracted.elapsedMs || Date.now() - startedAt,
     usage: extracted.usage,
+    jobId: extracted.jobId,
+    raw: extracted.extractResult,
     rawText: extracted.rawText,
-    draft: extracted.draft,
-    validationIssues: extracted.validationIssues,
-    data: extracted.data,
+    draft,
+    validationIssues,
+    data,
     evaluation,
+    fieldMetadata: extracted.extractMetadata,
   };
 }
 

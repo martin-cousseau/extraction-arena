@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   dismissNotification,
+  dismissNotificationsForRun,
   getNotifications,
   pushNotification,
   runDoneNotificationId,
@@ -64,6 +65,15 @@ describe('run notifications', () => {
     expect(toasts[0]?.id).toBe(runStartNotificationId(runId));
     expect(toasts[0]?.title).toBe('Cybertruck is getting evaluated');
     expect(toasts[0]?.chip).toEqual({ label: 'Evaluating', color: 'cyan' });
+  });
+
+  it('clears every toast for a deleted run and leaves other runs alone', () => {
+    pushNotification(runProgressNotification('run-keep', 'Keep', 'extracting'));
+    pushNotification(runProgressNotification('run-drop', 'Drop', 'extracting'));
+    dismissNotificationsForRun('run-drop');
+    const toasts = getNotifications();
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]?.runId).toBe('run-keep');
   });
 
   it('maps run status chips to lime, rose, and cyan', () => {

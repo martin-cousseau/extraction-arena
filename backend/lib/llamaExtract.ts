@@ -7,7 +7,14 @@ const POLL_MS = 2000;
 const MAX_WAIT_MS = 10 * 60 * 1000;
 const USAGE_RETRY = 5;
 
-export type LlamaExtractTier = 'agentic' | 'agentic_plus' | 'cost_effective' | 'turbo';
+export const LLAMA_EXTRACT_TIERS = ['cost_effective', 'agentic', 'agentic_plus', 'turbo'] as const;
+export type LlamaExtractTier = (typeof LLAMA_EXTRACT_TIERS)[number];
+const EXTRACT_TIER_SET = new Set<string>(LLAMA_EXTRACT_TIERS);
+
+export function resolveLlamaExtractTier(value: unknown): LlamaExtractTier {
+  return typeof value === 'string' && EXTRACT_TIER_SET.has(value) ? (value as LlamaExtractTier) : 'agentic';
+}
+
 export type LlamaExtractTarget = 'per_doc' | 'per_page' | 'per_table_row';
 export type LlamaParseTier = 'agentic' | 'agentic_plus' | 'cost_effective' | 'fast';
 
@@ -96,7 +103,7 @@ export async function runLlamaExtract(options: {
       data_schema: (options.configuration.data_schema ?? {}) as {
         [key: string]: string | number | boolean | unknown[] | { [key: string]: unknown } | null;
       },
-      tier: options.configuration.tier ?? 'agentic',
+      tier: resolveLlamaExtractTier(options.configuration.tier),
       extraction_target: options.configuration.extraction_target ?? 'per_doc',
       parse_tier: options.configuration.parse_tier ?? 'agentic',
       cite_sources: options.configuration.cite_sources ?? true,

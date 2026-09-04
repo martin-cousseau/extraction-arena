@@ -1,46 +1,44 @@
-import { llamaExtractDataSchema } from '../../canonical/extractSchema';
-import { creditsToUsd } from '../cost';
-import type { PipelineRunInput, RunUsage } from '../types';
+import { creditsToUsd } from '@/lib/harness/cost';
+import type { PipelineRunInput } from '@/lib/harness/types';
+import type { PipelineExtractOptions, PipelineExtractOutcome } from '../types';
+import { llamaExtractDataSchema } from './schema';
+import { DEFAULT_LLAMA_EXTRACT_TIER, resolveLlamaExtractTier, type LlamaExtractTier } from './tiers';
 
-export interface DocaiAdapterResult {
-  extractResult: unknown;
-  extractMetadata: unknown;
-  usage: RunUsage;
-  jobId: string;
-  elapsedMs: number;
-  rawText: string;
+export function llamaExtractClientConfig(tier?: LlamaExtractTier) {
+  return {
+    tier: resolveLlamaExtractTier(tier ?? DEFAULT_LLAMA_EXTRACT_TIER),
+    extraction_target: 'per_doc' as const,
+    parse_tier: 'agentic' as const,
+    cite_sources: true,
+    confidence_scores: true,
+  };
 }
 
-export interface DocaiAdapterOptions {
-  apiKeyOverride?: string;
-}
-
-export async function runDocaiAdapter(
+/**
+ * LlamaParse (LlamaExtract) extract. Always posts this pipeline's schema —
+ * callers cannot swap in another JSON Schema by accident.
+ */
+export async function runLlamaparseExtract(
   input: PipelineRunInput,
-  options: DocaiAdapterOptions = {}
-): Promise<DocaiAdapterResult> {
+  options: PipelineExtractOptions,
+  dataSchema: unknown = llamaExtractDataSchema()
+): Promise<PipelineExtractOutcome> {
   if (!input.pdfBlob) {
-    throw new Error('DocAI needs the original PDF. Re-upload the source file on the dataset page.');
+    throw new Error('LlamaParse needs the original PDF. Re-upload the source file on the dataset page.');
   }
 
   const startedAt = performance.now();
   const fd = new FormData();
   fd.append('pdf', input.pdfBlob, input.pdfName || 'document.pdf');
-  fd.append('data_schema', JSON.stringify(llamaExtractDataSchema()));
+  fd.append('data_schema', JSON.stringify(dataSchema));
   fd.append(
     'configuration',
-    JSON.stringify({
-      tier: 'agentic',
-      extraction_target: 'per_doc',
-      parse_tier: 'agentic',
-      cite_sources: true,
-      confidence_scores: true,
-    })
+    JSON.stringify(llamaExtractClientConfig(options.llamaTier))
   );
 
   const headers: HeadersInit = {};
-  if (options.apiKeyOverride?.trim()) {
-    headers['x-llama-api-key'] = options.apiKeyOverride.trim();
+  if (options.llamaKey?.trim()) {
+    headers['x-llama-api-key'] = options.llamaKey.trim();
   }
 
   const res = await fetch('/api/pipelines/docai', {
@@ -52,7 +50,7 @@ export async function runDocaiAdapter(
 
   const body = await res.json().catch(() => ({ error: res.statusText }));
   if (!res.ok) {
-    throw new Error(body.error ?? `DocAI failed (HTTP ${res.status})`);
+    throw new Error(body.error ?? `LlamaParse failed (HTTP ${res.status})`);
   }
 
   const credits = asNumber(body.usage?.credits);

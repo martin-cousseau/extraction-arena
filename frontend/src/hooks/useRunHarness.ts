@@ -4,8 +4,13 @@ import {
   createRunningRecord,
   executePipelineRun,
   failRun,
+  isRunRemoved,
+  registerInFlightRun,
+  unregisterInFlightRun,
+  getPipeline,
   type PipelineId,
 } from '@/lib/harness';
+import type { LlamaExtractTier } from '@/pipelines/llamaparse/tiers';
 import {
   dismissNotification,
   pushNotification,
@@ -28,21 +33,25 @@ export function useRunHarness() {
   }, []);
 
   const run = useCallback(
-    async (pipelineId?: PipelineId) => {
+    async (pipelineId?: PipelineId, extractOptions?: { llamaTier?: LlamaExtractTier }) => {
       const state = useAppStore.getState();
       const active = state.active;
       if (!active) throw new Error('No dataset selected.');
       const id = pipelineId ?? state.selectedPipeline;
+      getPipeline(id);
+      const llamaTier = id === 'docai' ? extractOptions?.llamaTier ?? state.llamaExtractTier : undefined;
       const controller = new AbortController();
       controllerRef.current = controller;
-      const draft = createRunningRecord(active.id, id);
+      const draft = createRunningRecord(active.id, id, llamaTier);
       const startId = runStartNotificationId(draft.id);
       const doneId = runDoneNotificationId(draft.id);
       const documentName = active.name;
+      registerInFlightRun(draft.id, controller);
       setRunning(true);
-      await upsertRun(draft);
-      pushNotification(runProgressNotification(draft.id, documentName, 'extracting'));
       try {
+        await upsertRun(draft);
+        if (isRunRemoved(draft.id)) return null;
+        pushNotification(runProgressNotification(draft.id, documentName, 'extracting'));
         const result = await executePipelineRun({
           pipelineId: id,
           input: {
@@ -60,12 +69,13 @@ export function useRunHarness() {
             openaiKey: state.openaiKey,
             xaiKey: state.xaiKey,
           },
-          docai: { apiKeyOverride: state.llamaKey },
+          docai: { apiKeyOverride: state.llamaKey, tier: llamaTier },
           onPhase: (phase) => {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || isRunRemoved(draft.id)) return;
             pushNotification(runProgressNotification(draft.id, documentName, phase));
           },
         });
+        if (isRunRemoved(draft.id)) return null;
         const completed = {
           ...draft,
           ...result,
@@ -73,6 +83,7 @@ export function useRunHarness() {
           startedAt: draft.startedAt,
         };
         await upsertRun(completed);
+        if (isRunRemoved(draft.id)) return null;
         dismissNotification(startId);
         const score = completed.evaluation?.extractionScore;
         pushNotification({
@@ -87,9 +98,11 @@ export function useRunHarness() {
         });
         return completed;
       } catch (error) {
+        if (isRunRemoved(draft.id)) return null;
         const cancelled = isAbortError(error) || controller.signal.aborted;
         const failed = failRun(draft, error, cancelled ? 'cancelled' : 'failed');
         await upsertRun(failed);
+        if (isRunRemoved(draft.id)) return null;
         dismissNotification(startId);
         if (cancelled) {
           pushNotification({
@@ -114,6 +127,7 @@ export function useRunHarness() {
         });
         return null;
       } finally {
+        unregisterInFlightRun(draft.id);
         setRunning(false);
         if (controllerRef.current === controller) controllerRef.current = null;
       }

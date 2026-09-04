@@ -9,7 +9,7 @@ The native pipeline is **DocAI** (LlamaExtract). GLM-5V-Turbo, GPT-5.4 mini, and
 Two independent Node projects (not a workspace). The root `package.json` only has convenience scripts (`npm run dev` starts both).
 
 - `backend/` — Express + TypeScript. `POST /api/extract` (PDF→PNG at 300 DPI), `POST /api/llm` (vision proxy), `POST /api/pipelines/docai` (LlamaExtract).
-- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4 + BoardUI. Datasets and runs in IndexedDB; scoring in `lib/evaluation/`.
+- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4 + BoardUI. Datasets and runs in IndexedDB; scoring in `lib/evaluation/`. Extraction pipelines live in `frontend/src/pipelines/` (one folder per pipeline: schema, adapter, logo; shared launch UI).
 
 ## Backend
 
@@ -37,7 +37,7 @@ Per dataset (`lib/canonical/ingest.ts`):
 
 Validation (`canonical/validate.ts`) never throws; problems are `Issue[]`. Evidence is page-level (`location_descriptor`), not bounding boxes. Lifecycle is metadata + rules (`canonical/lifecycle.ts`); there is no review-queue UI.
 
-A dataset is created via **Create Dataset** (name → PDF → golden JSON) and stored in IndexedDB (`lib/db.ts`, DB v3: original `pdfBlob` + `runs`). The extraction prompt (`buildCanonicalPrompt`) still sends the empty v1.1 skeleton for vision adapters — never golden answers. DocAI receives a domain-only JSON Schema (`llamaExtractDataSchema`). Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
+A dataset is created via **Create Dataset** (name → PDF → golden JSON) and stored in IndexedDB (`lib/db.ts`, DB v3: original `pdfBlob` + `runs`). The extraction prompt (`buildCanonicalPrompt`) still sends the empty v1.1 skeleton for vision adapters — never golden answers. LlamaParse (`pipelines/llamaparse`, run id `docai`) posts its own domain-only JSON Schema (`llamaExtractDataSchema`). Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
 
 Details: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/README.md).
 
@@ -61,7 +61,7 @@ Absent scalar → `"not_found"`. Absent array → `[]`. Absent object → `{}`. 
 
 | Id | Kind | Status |
 |---|---|---|
-| `docai` | Native LlamaExtract (`tier: agentic`, `parse_tier: agentic`) | Default |
+| `docai` | Native LlamaExtract (`tier` from launch radios: `cost_effective` / `agentic` / `agentic_plus` / `turbo`; `parse_tier: agentic`) | Default |
 | `glm` / `gpt` / `grok` | Vision via `/api/llm` | Deprecated |
 
 Vision calls: `temperature: 0`, `response_format: { type: "json_object" }`, prompt + one `image_url` per page.

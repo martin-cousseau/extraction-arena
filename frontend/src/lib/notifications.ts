@@ -56,6 +56,13 @@ export function dismissNotification(id: string): void {
   emit();
 }
 
+export function dismissNotificationsForRun(runId: string): void {
+  const next = items.filter((item) => item.runId !== runId);
+  if (next.length === items.length) return;
+  items = next;
+  emit();
+}
+
 export function runStartNotificationId(runId: string): string {
   return `run-start-${runId}`;
 }

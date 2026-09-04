@@ -4,6 +4,7 @@ import { buildCanonicalPrompt } from './lib/canonical/prompt';
 import { ingestToCanonical } from './lib/canonical/ingest';
 import {
   deleteDataset,
+  deleteRun,
   deepMerge,
   listDatasets,
   listRuns,
@@ -16,9 +17,16 @@ import { type ModelResult, type PageImage } from './lib/api';
 import { type FieldEvalConfig, resolveFieldConfig } from './lib/metrics';
 import {
   DEFAULT_PIPELINE_ID,
+  isRunRemoved,
+  markRunRemoved,
   type PipelineId,
   type RunRecord,
 } from './lib/harness';
+import {
+  DEFAULT_LLAMA_EXTRACT_TIER,
+  type LlamaExtractTier,
+} from './pipelines/llamaparse/tiers';
+import { dismissNotificationsForRun } from './lib/notifications';
 
 export type ConvertStatus = 'idle' | 'converting' | 'ready' | 'error';
 
@@ -44,6 +52,7 @@ interface AppState {
   llamaKey: string;
 
   selectedPipeline: PipelineId;
+  llamaExtractTier: LlamaExtractTier;
   runs: RunRecord[];
   inFlightRunId: string | null;
   customContexts: Record<string, string>;
@@ -113,8 +122,10 @@ interface AppState {
   setXaiKey: (k: string) => void;
   setLlamaKey: (k: string) => void;
   setSelectedPipeline: (id: PipelineId) => void;
+  setLlamaExtractTier: (tier: LlamaExtractTier) => void;
   loadRuns: (datasetId?: string) => Promise<void>;
   upsertRun: (run: RunRecord) => Promise<void>;
+  removeRun: (id: string) => Promise<void>;
   attachPdf: (blob: Blob, pdfName?: string) => Promise<void>;
   setDocumentContext: (value: string) => void;
 
@@ -163,6 +174,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   llamaKey: '',
 
   selectedPipeline: DEFAULT_PIPELINE_ID,
+  llamaExtractTier: DEFAULT_LLAMA_EXTRACT_TIER,
   runs: [],
   inFlightRunId: null,
 
@@ -296,12 +308,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setXaiKey: (xaiKey) => set({ xaiKey }),
   setLlamaKey: (llamaKey) => set({ llamaKey }),
   setSelectedPipeline: (selectedPipeline) => set({ selectedPipeline }),
+  setLlamaExtractTier: (llamaExtractTier) => set({ llamaExtractTier }),
   loadRuns: async (datasetId) => {
     const runs = await listRuns(datasetId);
     set({ runs });
   },
   upsertRun: async (run) => {
+    if (isRunRemoved(run.id)) return;
     await saveRun(run);
+    if (isRunRemoved(run.id)) {
+      await deleteRun(run.id);
+      return;
+    }
     set((s) => {
       const rest = s.runs.filter((r) => r.id !== run.id);
       return {
@@ -309,6 +327,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         inFlightRunId: run.status === 'running' ? run.id : s.inFlightRunId === run.id ? null : s.inFlightRunId,
       };
     });
+  },
+  removeRun: async (id) => {
+    markRunRemoved(id);
+    await deleteRun(id);
+    dismissNotificationsForRun(id);
+    set((s) => ({
+      runs: s.runs.filter((r) => r.id !== id),
+      inFlightRunId: s.inFlightRunId === id ? null : s.inFlightRunId,
+    }));
   },
   attachPdf: async (blob, pdfName) => {
     const active = get().active;
