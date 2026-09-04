@@ -22,14 +22,12 @@ export function DatasetNewPage() {
   const [pdfBlob, setPdfBlob] = useState<Blob | undefined>();
   const [dpi, setDpi] = useState(300);
   const [convertError, setConvertError] = useState<string | null>(null);
-  const [converting, setConverting] = useState(false);
   const [goldenText, setGoldenText] = useState('');
   const [goldenError, setGoldenError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const onPdf = async (file: File) => {
     setConvertError(null);
-    setConverting(true);
     try {
       const result = await convertPdfToPages(file);
       setPages(result.pages);
@@ -37,9 +35,9 @@ export function DatasetNewPage() {
       setDpi(result.dpi);
       setPdfBlob(file);
     } catch (e) {
-      setConvertError(e instanceof Error ? e.message : 'Conversion failed.');
-    } finally {
-      setConverting(false);
+      const message = e instanceof Error ? e.message : 'Conversion failed.';
+      setConvertError(message);
+      throw e instanceof Error ? e : new Error(message);
     }
   };
 
@@ -69,7 +67,7 @@ export function DatasetNewPage() {
         title="Create dataset"
         description="Name the dataset, upload the source PDF (converted at 300 DPI), then paste golden JSON."
       />
-      <Surface className="max-w-2xl">
+      <div className="mx-auto w-full max-w-2xl">
         <SegmentedControl
           selectedKeys={new Set([stage])}
           onSelectionChange={(keys) => {
@@ -86,42 +84,50 @@ export function DatasetNewPage() {
           <SegmentedControlItem id="pdf">2. PDF</SegmentedControlItem>
           <SegmentedControlItem id="golden">3. Golden JSON</SegmentedControlItem>
         </SegmentedControl>
+      </div>
 
-        {stage === 'name' && (
+      {stage === 'name' && (
+        <Surface className="mx-auto max-w-2xl">
           <div className="flex flex-col gap-4">
             <Input label="Dataset name" value={name} onChange={setName} placeholder="Cybertruck rescue sheet" />
             <Button disabled={!name.trim()} onClick={() => setStage('pdf')}>
               Continue
             </Button>
           </div>
-        )}
+        </Surface>
+      )}
 
-        {stage === 'pdf' && (
-          <div className="flex flex-col gap-4">
+      {stage === 'pdf' && (
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
+          <div className="w-full max-w-xl">
             <FileUpload
               allowedExtensions={['pdf']}
               maxBytes={MAX_BYTES}
-              onUploadComplete={(file) => void onPdf(file)}
+              lockOnComplete
+              processingLabel="Converting at 300 DPI…"
+              completeLabel="Converted successfully!"
+              onUploadComplete={(file) => onPdf(file)}
             />
-            {converting && <p className="text-body-regular text-text-secondary">Converting at 300 DPI…</p>}
-            {convertError && <p className="text-body-regular text-text-error-primary">{convertError}</p>}
-            {pages.length > 0 && (
-              <p className="text-body-regular text-text-secondary">
-                {pdfName} · {pages.length} pages · {dpi} DPI
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setStage('name')}>
-                Back
-              </Button>
-              <Button disabled={pages.length === 0} onClick={() => setStage('golden')}>
-                Continue
-              </Button>
-            </div>
           </div>
-        )}
+          {convertError && <p className="text-body-regular text-text-error-primary">{convertError}</p>}
+          {pages.length > 0 && (
+            <p className="text-body-regular text-text-secondary">
+              {pdfName} · {pages.length} pages · {dpi} DPI
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setStage('name')}>
+              Back
+            </Button>
+            <Button disabled={pages.length === 0} onClick={() => setStage('golden')}>
+              Continue
+            </Button>
+          </div>
+        </div>
+      )}
 
-        {stage === 'golden' && (
+      {stage === 'golden' && (
+        <Surface className="mx-auto max-w-2xl">
           <div className="flex flex-col gap-4">
             <label className="text-body-medium text-text-primary" htmlFor="golden-json">
               Golden JSON
@@ -148,8 +154,8 @@ export function DatasetNewPage() {
               </Button>
             </div>
           </div>
-        )}
-      </Surface>
+        </Surface>
+      )}
     </div>
   );
 }
