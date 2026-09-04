@@ -1,0 +1,34 @@
+{"path":"vehicle.manufacturer","value":"Tesla"}
+{"path":"vehicle.model","value":"Cybertruck"}
+{"path":"vehicle.model_year_start","value":"2023"}
+{"path":"vehicle.body_style","value":"truck"}
+{"path":"vehicle.door_count","value":"4"}
+{"path":"vehicle.seating_capacity","value":"5"}
+{"path":"vehicle.propulsion.high_voltage_battery","value":["800V Li-Ion"]}
+{"path":"vehicle.propulsion.low_voltage_battery","value":["48V Li-Ion"]}
+{"path":"responder_information.immobilization.ordered_steps","value":["1. CHOCK WHEELS","2. PUT VEHICLE INTO PARK POSITION"]}
+{"path":"responder_information.stabilization_lifting.lift_areas","value":["green Appropriate lift areas"]}
+{"path":"responder_information.stabilization_lifting.stabilization_points","value":["yellow Safe stabilization points for Cybertruck resting on its side"]}
+{"path":"responder_information.stabilization_lifting.no_contact_zones","value":["brown High Voltage (HV) Battery"]}
+{"path":"responder_information.disable_direct_hazards.ordered_steps","value":["Open the hood.","Double cut the first responder loop.","Double cut negative cable to the 48V battery only if necessary."]}
+{"path":"responder_information.disable_direct_hazards.first_responder_loop","value":"Always double cut the first responder loop."}
+{"path":"responder_information.occupant_access.access_methods","value":["OPENING DOORS FROM OUTSIDE WITH POWER","OPENING DOORS FROM INSIDE WITH POWER","OPENING TONNEAU AND LIFTGATE WITH POWER","Touch the open hood button on the touchscreen","OPENING FRONT DOORS FROM INSIDE WITHOUT POWER","OPENING REAR DOORS FROM INSIDE WITHOUT POWER","NON-OPERATIONAL WITHOUT POWER","Use external power supply to OPEN"]}
+{"path":"responder_information.stored_energy_fluids_gases_solids.energy_sources","value":["48V Li-Ion","800V Li-Ion","AIR"]}
+{"path":"responder_information.stored_energy_fluids_gases_solids.high_voltage_cables","value":["All high voltage cables have ORANGE INSULATION."]}
+{"path":"responder_information.stored_energy_fluids_gases_solids.fluids","value":["Coolant is blue or orange."]}
+{"path":"responder_information.stored_energy_fluids_gases_solids.prohibited_actions","value":["Never cut or open high voltage components or cables."]}
+{"path":"responder_information.fire.prohibitions","value":["DO NOT SUBMERGE VEHICLE TO EXTINGUISH/COOL BATTERY FIRE"]}
+{"path":"responder_information.fire.suppression_cooling_actions","value":["USE LARGE AMOUNTS OF WATER TO COOL THE BATTERY ENCLOSURE FROM THE BOTTOM OF THE VEHICLE"]}
+{"path":"responder_information.fire.monitoring_requirements","value":["MONITOR HV BATTERY TEMPERATURE FOR AT LEAST 24 HOURS"]}
+{"path":"responder_information.fire.reignition_risk","value":"POSSIBLE BATTERY RE-IGNITION!"}
+{"path":"responder_information.submersion.ordered_steps","value":["Wear appropriate PPE for water rescue.","Remove the vehicle from the water","continue with normal high voltage disabling","Raise the front of the vehicle approximately 30 cm (1 foot) to allow water to drain out of the vehicle and battery pack","store the vehicle flat"]}
+{"path":"responder_information.submersion.guidance","value":["Treat a submerged Cybertruck like any other submerged vehicle."]}
+{"path":"responder_information.submersion.hazard_note","value":"Vehicles submerged in water should be handled with a greater potential risk of an HV battery fire."}
+{"path":"responder_information.submersion.drainage_lift_requirement","value":"Raise the front of the vehicle approximately 30 cm (1 foot) to allow water to drain out of the vehicle and battery pack"}
+{"path":"responder_information.towing_transport_storage.transport_method","value":"Use a towing truck with flatbed."}
+{"path":"responder_information.towing_transport_storage.prohibited_methods","value":["NO towing with running traction wheels."]}
+{"path":"responder_information.towing_transport_storage.pre_transport_checks","value":["HV BATTERY TEMPERATURE SHOULD BE CHECKED BEFORE TRANSPORT"]}
+{"path":"responder_information.identification_recognition.silent_vehicle_warning","value":"LACK OF ENGINE NOISE DOES NOT MEAN VEHICLE IS OFF: SILENT MOVEMENT OR INSTANT RESTART CAPABILITY EXISTS UNTIL VEHICLE IS FULLY SHUT DOWN. WEAR APPROPRIATE PPE."}
+{"path":"vehicle_layout.structural_zones","value":["External body panels made of stainless steel.","Understructure for the A, B, and C pillar are made of ultra-high strength steel.","Forward overhead rail is made of high strength steel."]}
+{"path":"vehicle_layout.glazing","value":["Windshield, roof, and moving door glass are laminated glass.","The rear window and front quarter side windows are tempered glass."]}
+{"path":"warnings","value":["LACK OF ENGINE NOISE DOES NOT MEAN VEHICLE IS OFF: SILENT MOVEMENT OR INSTANT RESTART CAPABILITY EXISTS UNTIL VEHICLE IS FULLY SHUT DOWN. WEAR APPROPRIATE PPE.","Do not push on HV Battery.","Not every high voltage component is labeled. Always wear appropriate PPE. Always double cut the first responder loop. Do not attempt to open the high voltage (HV) battery.","Electrical and mechanical releases like doors and seat belts may be compromised after a collision.","NON-OPERATIONAL WITHOUT POWER","All high voltage cables have ORANGE INSULATION.","Never cut or open high voltage components or cables.","Coolant is blue or orange.","DO NOT SUBMERGE VEHICLE TO EXTINGUISH/COOL BATTERY FIRE","POSSIBLE BATTERY RE-IGNITION!","POSSIBLE BATTERY RE-IGNITION! AFTER A FIRE INCIDENT, STORE OUTSIDE AT A SAFE DISTANCE (AT LEAST 50 FT/ 15 M) FROM OTHER VEHICLES AND STRUCTURES!"]}

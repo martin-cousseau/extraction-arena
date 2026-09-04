@@ -2,9 +2,17 @@
 
 # Extraction Arena
 
+<p>
+  <a href="https://huggingface.co/datasets/martincousseau/Cybertruck-Rescue-Sheet"><img src="docs/assets/huggingface-logo.jpg" alt="Hugging Face" height="36" /></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/martin-cousseau/extraction-arena"><img src="docs/assets/github-logo.jpg" alt="GitHub" height="36" /></a>
+  &nbsp;&nbsp;
+  <a href="https://youtu.be/QXWN8WyvPmI"><img src="docs/assets/youtube-logo.jpg" alt="YouTube" height="36" /></a>
+</p>
+
 Compare vision models on first-responder rescue sheets. Upload a PDF, paste its golden JSON, then run GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) side by side. Each field is scored against a versioned `rescue-sheet-ev-v1.1` record. Datasets live in the browser (IndexedDB) and survive restarts.
 
-The seed document is Tesla’s public 4-page Cybertruck rescue sheet. Fixture wording taken from that sheet remains Tesla’s.
+The seed document is Tesla’s public 4-page [Cybertruck rescue sheet](https://digitalassets.tesla.com/tesla-contents/image/upload/Cybertruck-Rescue-Sheet.pdf). The structured gold is on [Hugging Face](https://huggingface.co/datasets/martincousseau/Cybertruck-Rescue-Sheet). Walkthrough: [YouTube](https://youtu.be/QXWN8WyvPmI). Fixture wording taken from that sheet remains Tesla’s.
 
 ## Quick start
 
