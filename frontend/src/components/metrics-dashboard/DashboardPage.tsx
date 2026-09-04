@@ -546,7 +546,7 @@ function SummaryStrip({
         </span>
       </div>
       <div className="ml-auto flex flex-wrap items-center gap-4">
-        <SummaryStat label="Extraction" value={gate.extractionScore / 100} has={hasData} />
+        <SummaryStat label="Extraction Score" value={gate.extractionScore / 100} has={hasData} />
         <SummaryStat label="Exact" value={gate.accuracy / 100} has={hasData} />
         <SummaryStat label="Partial" value={gate.partialAccuracy / 100} has={hasData} />
         <SummaryStat label="Precision" value={summary.precision} has={hasData && summary.count > 0} />

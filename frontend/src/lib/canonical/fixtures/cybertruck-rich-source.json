@@ -99,20 +99,23 @@
       "lift_areas": [
         {
           "color_code": "green",
-          "meaning": "Appropriate lift areas"
+          "meaning": "Appropriate lift areas",
+          "source_text": "green Appropriate lift areas"
         }
       ],
       "stabilization_points": [
         {
           "color_code": "yellow",
-          "meaning": "Safe stabilization points for Cybertruck resting on its side"
+          "meaning": "Safe stabilization points for Cybertruck resting on its side",
+          "source_text": "yellow Safe stabilization points for Cybertruck resting on its side"
         }
       ],
       "no_contact_zones": [
         {
-          "color_code": "orange",
+          "color_code": "brown",
           "component_class": "high_voltage_battery",
-          "source_text": "Do not push on HV Battery."
+          "meaning": "High Voltage (HV) Battery",
+          "source_text": "brown High Voltage (HV) Battery"
         }
       ]
     },
@@ -320,32 +323,41 @@
       "ordered_steps": [
         {
           "step_number": 1,
-          "action": "wear_appropriate_ppe_for_water_rescue"
+          "action": "wear_appropriate_ppe_for_water_rescue",
+          "source_text": "Wear appropriate PPE for water rescue."
         },
         {
           "step_number": 2,
-          "action": "remove_vehicle_from_water"
+          "action": "remove_vehicle_from_water",
+          "source_text": "Remove the vehicle from the water"
         },
         {
           "step_number": 3,
-          "action": "continue_normal_high_voltage_disabling"
+          "action": "continue_normal_high_voltage_disabling",
+          "source_text": "continue with normal high voltage disabling"
         },
         {
           "step_number": 4,
           "action": "raise_front_of_vehicle_to_drain_vehicle_and_battery_pack",
+          "source_text": "Raise the front of the vehicle approximately 30 cm (1 foot) to allow water to drain out of the vehicle and battery pack",
           "lift_height_cm": 30,
           "source_equivalent_imperial": "1 foot"
         },
         {
           "step_number": 5,
-          "action": "store_vehicle_flat"
+          "action": "store_vehicle_flat",
+          "source_text": "store the vehicle flat"
         }
+      ],
+      "guidance": [
+        "Treat a submerged Cybertruck like any other submerged vehicle."
       ],
       "drainage_lift_requirement": {
         "vehicle_end_to_raise": "front",
         "approximate_lift_height_cm": 30,
         "source_equivalent_imperial": "1 foot",
-        "purpose": "allow water to drain out of vehicle and battery pack"
+        "purpose": "allow water to drain out of vehicle and battery pack",
+        "source_text": "Raise the front of the vehicle approximately 30 cm (1 foot) to allow water to drain out of the vehicle and battery pack"
       },
       "hazard_note": "Vehicles submerged in water should be handled with a greater potential risk of an HV battery fire."
     },
@@ -375,7 +387,8 @@
           "other_vehicles",
           "structures"
         ],
-        "hazard_note": "POSSIBLE BATTERY RE-IGNITION!"
+        "hazard_note": "POSSIBLE BATTERY RE-IGNITION!",
+        "source_text": "POSSIBLE BATTERY RE-IGNITION! AFTER A FIRE INCIDENT, STORE OUTSIDE AT A SAFE DISTANCE (AT LEAST 50 FT/ 15 M) FROM OTHER VEHICLES AND STRUCTURES!"
       }
     }
   },
@@ -498,13 +511,7 @@
       "warning_id": "unlabelled_hv_components",
       "procedure_phase": "disable_direct_hazards",
       "hazard_type": "electric_shock",
-      "source_text": "Not every high voltage component is labeled."
-    },
-    {
-      "warning_id": "do_not_open_hv_battery",
-      "procedure_phase": "disable_direct_hazards",
-      "hazard_type": "electric_shock",
-      "source_text": "Do not attempt to open the high voltage (HV) battery."
+      "source_text": "Not every high voltage component is labeled. Always wear appropriate PPE. Always double cut the first responder loop. Do not attempt to open the high voltage (HV) battery."
     },
     {
       "warning_id": "releases_may_be_compromised",
@@ -513,16 +520,46 @@
       "source_text": "Electrical and mechanical releases like doors and seat belts may be compromised after a collision."
     },
     {
+      "warning_id": "non_operational_without_power",
+      "procedure_phase": "occupant_access",
+      "hazard_type": "access_failure",
+      "source_text": "NON-OPERATIONAL WITHOUT POWER"
+    },
+    {
+      "warning_id": "hv_cables_orange_insulation",
+      "procedure_phase": "stored_energy_fluids_gases_solids",
+      "hazard_type": "electric_shock",
+      "source_text": "All high voltage cables have ORANGE INSULATION."
+    },
+    {
+      "warning_id": "do_not_cut_or_open_hv_components_or_cables",
+      "procedure_phase": "stored_energy_fluids_gases_solids",
+      "hazard_type": "electric_shock",
+      "source_text": "Never cut or open high voltage components or cables."
+    },
+    {
+      "warning_id": "coolant_color",
+      "procedure_phase": "stored_energy_fluids_gases_solids",
+      "hazard_type": "chemical_burn",
+      "source_text": "Coolant is blue or orange."
+    },
+    {
       "warning_id": "do_not_submerge_for_battery_fire",
       "procedure_phase": "fire",
       "hazard_type": "thermal_runaway",
       "source_text": "DO NOT SUBMERGE VEHICLE TO EXTINGUISH/COOL BATTERY FIRE"
     },
     {
-      "warning_id": "battery_reignition",
+      "warning_id": "battery_reignition_short",
       "procedure_phase": "fire",
       "hazard_type": "reignition",
       "source_text": "POSSIBLE BATTERY RE-IGNITION!"
+    },
+    {
+      "warning_id": "battery_reignition_storage",
+      "procedure_phase": "towing_transport_storage",
+      "hazard_type": "reignition",
+      "source_text": "POSSIBLE BATTERY RE-IGNITION! AFTER A FIRE INCIDENT, STORE OUTSIDE AT A SAFE DISTANCE (AT LEAST 50 FT/ 15 M) FROM OTHER VEHICLES AND STRUCTURES!"
     }
   ],
   "provenance": {
@@ -543,6 +580,19 @@
       "02/04": "file:4 (4.jpg)",
       "03/04": "file:1 (2.jpg)",
       "04/04": "file:3 (1.jpg)"
+    },
+    "exact_scoring_policy_v1": {
+      "score_source_text": true,
+      "dropped_from_exact": [
+        "vehicle.propulsion.primary_energy_source",
+        "vehicle_layout.components",
+        "pyrotechnic_devices",
+        "post_incident_storage (scored via warnings inventory)"
+      ],
+      "renamed_projection_paths": {
+        "vehicle.propulsion.high_voltage_systems": "vehicle.propulsion.high_voltage_battery",
+        "vehicle.propulsion.low_voltage_systems": "vehicle.propulsion.low_voltage_battery"
+      }
     }
   }
 }
