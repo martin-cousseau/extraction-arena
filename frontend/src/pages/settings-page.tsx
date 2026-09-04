@@ -77,7 +77,13 @@ export function SettingsPage() {
               hint="Optional. Canonical key is LLAMA_CLOUD_API_KEY on the backend."
             />
             <Input label="Z.AI (deprecated GLM)" type={showKeys ? 'text' : 'password'} value={zaiKey} onChange={setZaiKey} />
-            <Input label="OpenAI (deprecated GPT + judge)" type={showKeys ? 'text' : 'password'} value={openaiKey} onChange={setOpenaiKey} />
+            <Input
+              label="OpenAI (GPT-5.4 mini judge)"
+              type={showKeys ? 'text' : 'password'}
+              value={openaiKey}
+              onChange={setOpenaiKey}
+              hint="Used by Analyze with judge on a completed run. Not required for DocAI."
+            />
             <Input label="xAI (deprecated Grok)" type={showKeys ? 'text' : 'password'} value={xaiKey} onChange={setXaiKey} />
           </div>
         </Surface>

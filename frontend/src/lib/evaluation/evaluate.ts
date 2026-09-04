@@ -301,6 +301,8 @@ export function sectionOfKey(key: string): string {
 
 export interface SectionAggregate {
   section: string;
+  meanPrecision: number;
+  meanRecall: number;
   meanF1: number;
   meanPartial: number;
   accuracy: number;
@@ -320,6 +322,8 @@ export function aggregateBySection(fields: FieldEvaluation[]): SectionAggregate[
       const agg = aggregateFieldEvaluations(list);
       return {
         section,
+        meanPrecision: agg.meanPrecision,
+        meanRecall: agg.meanRecall,
         meanF1: agg.meanF1,
         meanPartial: agg.partialAccuracy / 100,
         accuracy: agg.accuracy,

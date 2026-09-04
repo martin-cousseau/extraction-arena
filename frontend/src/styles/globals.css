@@ -731,6 +731,22 @@ input[type="search"]::-webkit-search-cancel-button {
 .bui-table tbody tr.cursor-pointer {
   cursor: pointer;
 }
+.bui-table tbody tr[data-expanded] {
+  background-color: var(--color-background-tertiary-hover);
+}
+.bui-table tbody tr.bui-table-expand-row,
+.bui-table tbody tr.bui-table-expand-row[data-hovered],
+.bui-table tbody tr.bui-table-expand-row:hover,
+.bui-table tbody tr[data-level="2"],
+.bui-table tbody tr[data-level="2"][data-hovered],
+.bui-table tbody tr[data-level="2"]:hover {
+  background-color: transparent;
+  cursor: default;
+}
+.bui-table td.bui-table-expand {
+  padding: 0;
+  vertical-align: top;
+}
 
 /* React Aria overlays (sidebar menus, selects) sit above page cards. */
 [data-rac][data-placement] {

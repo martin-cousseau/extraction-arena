@@ -58,7 +58,7 @@ export function WordDiff({ golden, actual }: { golden: string; actual: string })
           className={cx(
             t.type === 'equal' && 'text-text-primary',
             t.type === 'removed' && 'text-text-error-primary line-through',
-            t.type === 'added' && 'text-button-ghost-foreground',
+            t.type === 'added' && 'text-status-cyan-text',
           )}
         >
           {idx > 0 ? ' ' : ''}

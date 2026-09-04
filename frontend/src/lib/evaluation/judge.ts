@@ -241,7 +241,7 @@ export async function runSemanticJudgeAndUplift(
       evaluation,
       fromCache: 0,
       fetched: 0,
-      error: 'OpenAI API key required for semantic judge (gpt-5.4-nano).',
+      error: 'OpenAI API key required for semantic judge (gpt-5.4-mini).',
     };
   }
 
