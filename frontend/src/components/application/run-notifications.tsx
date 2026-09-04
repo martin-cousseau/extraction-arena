@@ -23,19 +23,15 @@ export function RunNotifications() {
       {toasts.map((toast) => (
         <Notification
           key={toast.id}
-          title={
-            toast.chip ? (
-              <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
-                <span className="min-w-0">{toast.title}</span>
-                <Chip variant="bold" color={toast.chip.color}>
-                  {toast.chip.label}
-                </Chip>
-              </span>
-            ) : (
-              toast.title
-            )
-          }
+          title={toast.title}
           description={toast.description}
+          chip={
+            toast.chip ? (
+              <Chip variant="bold" color={toast.chip.color}>
+                {toast.chip.label}
+              </Chip>
+            ) : undefined
+          }
           status={toast.status}
           avatar={ARENA_MARK}
           autoDismissDuration={toast.autoDismissDuration}

@@ -69,6 +69,8 @@ export interface NotificationProps
   icon?: IconComponent;
   /** Avatar leading visual. When set, it takes precedence over `icon`. */
   avatar?: NotificationAvatar;
+  /** Optional status chip rendered on its own line below the title. */
+  chip?: ReactNode;
   /** Optional small BoardUI action buttons rendered below the message. */
   actions?: NotificationAction[];
   dismissible?: boolean;
@@ -120,6 +122,7 @@ const styles = sortCx({
   content: "flex min-w-0 flex-1 flex-col gap-1",
   header: "flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5",
   title: "text-body-medium text-text-primary",
+  chip: "self-start",
   timestamp: "text-body-regular text-text-tertiary",
   description: "text-body-regular text-text-secondary",
   actions: "mt-1.5 flex flex-wrap items-center gap-2",
@@ -184,6 +187,7 @@ export function Notification({
   status = "neutral",
   icon,
   avatar,
+  chip,
   actions,
   dismissible = true,
   closeLabel = "Dismiss notification",
@@ -258,6 +262,7 @@ export function Notification({
               <p className={styles.title}>{title}</p>
               {timestamp ? <span className={styles.timestamp}>{timestamp}</span> : null}
             </div>
+            {chip ? <div className={styles.chip}>{chip}</div> : null}
             {description ? <p className={styles.description}>{description}</p> : null}
 
             {actions?.length ? (
