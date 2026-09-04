@@ -101,6 +101,11 @@ export async function executePipelineRun(options: HarnessRunOptions): Promise<Om
   };
 }
 
+/** Dashboard run volume: completed evals only. Failed, cancelled, and in-flight runs do not count. */
+export function isCompletedEvalRun(run: Pick<RunRecord, 'status' | 'evaluation'>): boolean {
+  return run.status === 'completed' && run.evaluation != null;
+}
+
 export function failRun(record: RunRecord, error: unknown, status: 'failed' | 'cancelled' = 'failed'): RunRecord {
   const message = error instanceof Error ? error.message : String(error);
   return {

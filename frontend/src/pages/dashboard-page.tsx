@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/base/table/table';
 import { PageHeader, Surface } from '@/app/layout';
-import { PIPELINES } from '@/lib/harness';
+import { isCompletedEvalRun, PIPELINES } from '@/lib/harness';
 import { formatCost, formatMs } from '@/lib/utils';
 import { useAppStore } from '@/store';
 
@@ -37,7 +37,7 @@ export function DashboardPage() {
     void loadRuns();
   }, [loadRuns]);
 
-  const completed = runs.filter((r) => r.status === 'completed' && r.evaluation);
+  const completed = runs.filter(isCompletedEvalRun);
   const last = completed[0];
   const spend = completed.reduce((s, r) => s + (r.usage.costUsd || 0), 0);
   const avgScore = completed.length
@@ -56,7 +56,7 @@ export function DashboardPage() {
       icon: RiDatabase2Line,
       label: 'Datasets',
       value: String(datasets.length),
-      delta: `${runs.length} runs`,
+      delta: `${completed.length} runs`,
       deltaColor: 'lime',
     },
     {
@@ -86,7 +86,7 @@ export function DashboardPage() {
 
   const volumeSeries: OrdersPoint[] = MONTHS.map((label, i) => ({
     label,
-    current: runs.filter((r) => new Date(r.startedAt).getMonth() === i).length,
+    current: completed.filter((r) => new Date(r.startedAt).getMonth() === i).length,
     previous: 0,
   }));
 
@@ -95,11 +95,6 @@ export function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description="Eval harness results: DocAI is the native pipeline. Vision models remain available as deprecated adapters."
-        actions={
-          <Button variant="secondary" onClick={() => navigate('/datasets/new')}>
-            Create dataset
-          </Button>
-        }
       />
       <StatCards stats={stats} />
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
