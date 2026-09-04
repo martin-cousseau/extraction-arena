@@ -23,10 +23,12 @@ import { RadioDot } from "./radio";
 export interface RadioCardProps extends Omit<AriaRadioProps, "children"> {
   title: ReactNode;
   description?: ReactNode;
+  /** Optional leading visual (logo, avatar) to the left of the title. */
+  leading?: ReactNode;
   ref?: Ref<HTMLLabelElement>;
 }
 
-export function RadioCard({ className, title, description, ref, ...props }: RadioCardProps) {
+export function RadioCard({ className, title, description, leading, ref, ...props }: RadioCardProps) {
   return (
     <AriaRadio
       ref={ref}
@@ -45,11 +47,14 @@ export function RadioCard({ className, title, description, ref, ...props }: Radi
     >
       {(state) => (
         <>
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="truncate text-body-medium text-text-primary">{title}</span>
-            {description !== undefined && description !== null && (
-              <span className="truncate text-body-regular text-text-secondary">{description}</span>
-            )}
+          <span className="flex min-w-0 items-center gap-3">
+            {leading}
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate text-body-medium text-text-primary">{title}</span>
+              {description !== undefined && description !== null && (
+                <span className="truncate text-body-regular text-text-secondary">{description}</span>
+              )}
+            </span>
           </span>
           <span className="flex shrink-0 items-center py-1">
             <RadioDot size="md" selected={state.isSelected} focusVisible={state.isFocusVisible} />
