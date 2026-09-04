@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
+const apiProxy = process.env.VITE_API_PROXY ?? 'http://localhost:3001';
+const usePolling = process.env.CHOKIDAR_USEPOLLING === 'true';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -11,10 +14,21 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: 5173,
-    // The Express backend serves the PDF->PNG conversion route.
+    strictPort: true,
+    // Express PDF→PNG / DocAI / vision proxy. VITE_API_PROXY is the Docker service URL.
     proxy: {
-      '/api': 'http://localhost:3001',
+      '/api': {
+        target: apiProxy,
+        changeOrigin: true,
+        timeout: 600_000,
+        proxyTimeout: 600_000,
+      },
+    },
+    ...(usePolling ? { watch: { usePolling: true, interval: 300 } } : {}),
+    hmr: {
+      clientPort: 5173,
     },
   },
   test: {
@@ -22,3 +36,4 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
   },
 });
+

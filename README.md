@@ -31,16 +31,37 @@ npm run dev
 
 Or run them separately: `npm run dev --prefix backend` and `npm run dev --prefix frontend`.
 
-Open http://localhost:5173 → **Datasets → Create dataset** → name, PDF, golden JSON → **Run DocAI**. Results land on **Dashboard** and **Runs**.
+Open http://localhost:5173 → **Datasets → Create dataset** → name, PDF, golden JSON → **Run Extraction Arena**. Results land on **Dashboard** and **Runs**.
 
 ## Docker
 
+Hot-reload (Vite HMR + `tsx watch`). Source is bind-mounted, so edits apply without rebuilding:
+
 ```bash
 cp .env.example .env   # add LLAMA_CLOUD_API_KEY (and optional deprecated VITE_* keys)
+docker compose -f docker-compose.dev.yml up --build
+# or: npm run docker:dev
+```
+
+- Frontend → http://localhost:5173
+- Backend → http://localhost:3001
+
+Reload:
+
+| Change | What to do |
+|---|---|
+| Frontend / backend source | Save the file. Vite HMR and `tsx watch` pick it up. |
+| One service stuck | `docker compose -f docker-compose.dev.yml restart backend` (or `frontend`) |
+| `package.json` / lockfile | Restart the service (`npm ci` runs on lockfile change), or `npm run docker:dev:watch` |
+| Stop | Ctrl+C, or `npm run docker:dev:down` |
+
+Production-like (compiled backend + nginx, no live reload):
+
+```bash
 docker compose up --build
 ```
 
-Frontend is at http://localhost:5173 (nginx proxies `/api/*` to the backend). Backend is also on http://localhost:3001.
+Frontend is at http://localhost:5173 (nginx proxies `/api/*` to the backend). Backend is also on http://localhost:3001. Don't run both compose files at once — they share those ports.
 
 ## Canonical contract
 
