@@ -27,14 +27,20 @@ type UploadPhase = "idle" | "uploading" | "complete";
 type StaggerState = "shown" | "hiding" | "hidden";
 
 export interface FileUploadProps {
-  /** Called after the progress and success states finish. */
-  onUploadComplete?: (file: File) => void;
+  /** Called after the progress and success states finish. A returned promise keeps the loading ring until it settles. */
+  onUploadComplete?: (file: File) => void | Promise<void>;
   /** Accepted filename extensions without dots. */
   allowedExtensions?: readonly string[];
   /** Maximum accepted file size in bytes. */
   maxBytes?: number;
   /** Overrides the icon shown while a file uploads. */
   renderFileIcon?: (file: File) => ReactNode;
+  /** Stay on the complete state and reject further files. */
+  lockOnComplete?: boolean;
+  /** Status line shown while the upload/processing ring is active. */
+  processingLabel?: string;
+  /** Status line shown on the complete state. */
+  completeLabel?: string;
   className?: string;
 }
 
@@ -119,6 +125,9 @@ export function FileUpload({
   allowedExtensions = DEFAULT_EXTENSIONS,
   maxBytes = DEFAULT_MAX_BYTES,
   renderFileIcon,
+  lockOnComplete = false,
+  processingLabel,
+  completeLabel = "Uploaded successfully!",
   className,
 }: FileUploadProps) {
   const [phase, setPhase] = useState<UploadPhase>("idle");
@@ -126,6 +135,7 @@ export function FileUpload({
   const [file, setFile] = useState<File | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [statusLine, setStatusLine] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -164,6 +174,43 @@ export function FileUpload({
     setFile(nextFile);
     setProgress(0);
     setPhase("uploading");
+    setStatusLine(processingLabel ?? null);
+
+    if (lockOnComplete) {
+      let value = 8;
+      setProgress(8);
+      let settled = false;
+      let failed = false;
+
+      Promise.resolve()
+        .then(() => onUploadComplete?.(nextFile))
+        .then(() => {
+          settled = true;
+        })
+        .catch((error: unknown) => {
+          failed = true;
+          setRejection(error instanceof Error ? error.message : "Upload failed");
+          setPhase("idle");
+          setFile(null);
+          setProgress(0);
+          setStatusLine(null);
+          timers.current.push(setTimeout(() => setRejection(null), 2600));
+        });
+
+      const tick = () => {
+        if (failed) return;
+        if (settled) {
+          setProgress(100);
+          setPhase("complete");
+          return;
+        }
+        value = Math.min(90, value + 2 + Math.random() * 5);
+        setProgress(Math.round(value));
+        timers.current.push(setTimeout(tick, 90));
+      };
+      timers.current.push(setTimeout(tick, 80));
+      return;
+    }
 
     let value = 0;
     const tick = () => {
@@ -180,6 +227,7 @@ export function FileUpload({
           onUploadComplete?.(nextFile);
           setPhase("idle");
           setFile(null);
+          setStatusLine(null);
         }, 1600),
       );
     };
@@ -235,10 +283,11 @@ export function FileUpload({
         accept={allowedExtensions.map((extension) => `.${extension}`).join(",")}
         className="sr-only"
         tabIndex={-1}
+        disabled={busy}
         onChange={(event) => {
           const selectedFile = event.target.files?.[0];
           event.target.value = "";
-          if (selectedFile) startUpload(selectedFile);
+          if (selectedFile && !busy) startUpload(selectedFile);
         }}
       />
 
@@ -302,6 +351,8 @@ export function FileUpload({
           "absolute inset-0 flex flex-col items-center justify-center gap-3.5",
           staggerContainer(idleReveal),
           busy && "pointer-events-none",
+          busy && "opacity-0",
+          idleReveal === "hidden" && "hidden",
         )}
       >
         <span className="t-stagger-line t-stagger-line--1 flex size-10 items-center justify-center rounded-full bg-file-upload-icon-background p-2.5">
@@ -334,6 +385,7 @@ export function FileUpload({
           "absolute inset-0 flex flex-col items-center justify-center",
           staggerContainer(busyReveal),
           !busy && "pointer-events-none",
+          busyReveal === "hidden" && "hidden",
         )}
       >
         <span className="t-stagger-line t-stagger-line--1 flex size-10 items-center justify-center rounded-full border border-border-button-default bg-background-primary-default p-2">
@@ -347,18 +399,19 @@ export function FileUpload({
             className={cx(
               "absolute inset-x-0 text-center text-body-2-regular text-text-secondary",
               staggerLine(uploadingLine),
+              uploadingLine === "hidden" && "hidden",
             )}
           >
-            Uploading {file ? formatFileSize(file.size) : ""}
-            ...
+            {statusLine ?? `Uploading ${file ? formatFileSize(file.size) : ""}...`}
           </p>
           <p
             className={cx(
               "absolute inset-x-0 text-center text-body-2-regular text-text-secondary",
               staggerLine(completeLine),
+              completeLine === "hidden" && "hidden",
             )}
           >
-            Uploaded successfully!
+            {completeLabel}
           </p>
         </div>
       </div>
