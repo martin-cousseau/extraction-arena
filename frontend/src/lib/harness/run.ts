@@ -9,6 +9,9 @@ import { runDocaiAdapter, type DocaiAdapterOptions } from './adapters/docai';
 import { runVisionAdapter, type VisionAdapterKeys } from './adapters/vision';
 import type { PipelineId, PipelineRunInput, RunRecord } from './types';
 
+/** Live pipeline stages. Every adapter extracts, then the harness scores. */
+export type RunProgressPhase = 'extracting' | 'evaluating';
+
 export interface HarnessRunOptions {
   pipelineId: PipelineId;
   input: PipelineRunInput;
@@ -16,6 +19,7 @@ export interface HarnessRunOptions {
   golden: GoldenDataset;
   visionKeys: VisionAdapterKeys;
   docai?: DocaiAdapterOptions;
+  onPhase?: (phase: RunProgressPhase) => void | Promise<void>;
 }
 
 function flattenProjection(proj: ReturnType<typeof project>): Record<string, GoldenValue> {
@@ -51,7 +55,7 @@ export function createRunningRecord(
 
 /** Normalize → validate → project → score. Never throws on validation issues. */
 export async function executePipelineRun(options: HarnessRunOptions): Promise<Omit<RunRecord, 'id' | 'startedAt'>> {
-  const { pipelineId, input, configMap, golden } = options;
+  const { pipelineId, input, configMap, golden, onPhase } = options;
   const startedAt = Date.now();
   const ctx: SourceContext = {
     recordId: input.datasetId,
@@ -60,8 +64,11 @@ export async function executePipelineRun(options: HarnessRunOptions): Promise<Om
     sourceFormat: input.pdfName,
   };
 
+  await onPhase?.('extracting');
+
   if (pipelineId === 'docai') {
     const extracted = await runDocaiAdapter(input, options.docai);
+    await onPhase?.('evaluating');
     const draft = normalizeVlmToDraft(extracted.extractResult, ctx);
     const validation = validate(draft);
     const data = flattenProjection(project(draft));
@@ -85,6 +92,7 @@ export async function executePipelineRun(options: HarnessRunOptions): Promise<Om
   }
 
   const extracted = await runVisionAdapter(pipelineId, input, options.visionKeys);
+  await onPhase?.('evaluating');
   const evaluation = evaluateDataset(extracted.data, golden, configMap);
   return {
     datasetId: input.datasetId,

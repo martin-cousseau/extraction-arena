@@ -6,7 +6,17 @@ import {
   failRun,
   type PipelineId,
 } from '@/lib/harness';
+import {
+  dismissNotification,
+  pushNotification,
+  runDoneNotificationId,
+  runProgressNotification,
+  runStartNotificationId,
+  runStatusChip,
+} from '@/lib/notifications';
 import { useAppStore } from '@/store';
+
+const DONE_DISMISS_MS = 8000;
 
 export function useRunHarness() {
   const [running, setRunning] = useState(false);
@@ -26,8 +36,12 @@ export function useRunHarness() {
       const controller = new AbortController();
       controllerRef.current = controller;
       const draft = createRunningRecord(active.id, id);
+      const startId = runStartNotificationId(draft.id);
+      const doneId = runDoneNotificationId(draft.id);
+      const documentName = active.name;
       setRunning(true);
       await upsertRun(draft);
+      pushNotification(runProgressNotification(draft.id, documentName, 'extracting'));
       try {
         const result = await executePipelineRun({
           pipelineId: id,
@@ -47,6 +61,10 @@ export function useRunHarness() {
             xaiKey: state.xaiKey,
           },
           docai: { apiKeyOverride: state.llamaKey },
+          onPhase: (phase) => {
+            if (controller.signal.aborted) return;
+            pushNotification(runProgressNotification(draft.id, documentName, phase));
+          },
         });
         const completed = {
           ...draft,
@@ -55,11 +73,45 @@ export function useRunHarness() {
           startedAt: draft.startedAt,
         };
         await upsertRun(completed);
+        dismissNotification(startId);
+        const score = completed.evaluation?.extractionScore;
+        pushNotification({
+          id: doneId,
+          title: 'Run completed',
+          description:
+            score != null ? `${active.name} · extraction score ${score}` : `${active.name} finished.`,
+          status: 'success',
+          chip: runStatusChip('completed'),
+          runId: draft.id,
+          autoDismissDuration: DONE_DISMISS_MS,
+        });
         return completed;
       } catch (error) {
         const cancelled = isAbortError(error) || controller.signal.aborted;
-        await upsertRun(failRun(draft, error, cancelled ? 'cancelled' : 'failed'));
-        if (!cancelled) throw error;
+        const failed = failRun(draft, error, cancelled ? 'cancelled' : 'failed');
+        await upsertRun(failed);
+        dismissNotification(startId);
+        if (cancelled) {
+          pushNotification({
+            id: doneId,
+            title: 'Run cancelled',
+            description: active.name,
+            status: 'neutral',
+            chip: runStatusChip('cancelled'),
+            runId: draft.id,
+            autoDismissDuration: DONE_DISMISS_MS,
+          });
+          return null;
+        }
+        pushNotification({
+          id: doneId,
+          title: 'Run failed',
+          description: failed.error ?? `${active.name} did not finish.`,
+          status: 'error',
+          chip: runStatusChip('failed'),
+          runId: draft.id,
+          autoDismissDuration: DONE_DISMISS_MS,
+        });
         return null;
       } finally {
         setRunning(false);

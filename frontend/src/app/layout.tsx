@@ -8,11 +8,11 @@ import {
   RiPulseLine,
 } from '@remixicon/react';
 import { DashboardSidebar, type DashboardNavItem } from '@/components/application/dashboard/dashboard-sidebar';
+import { RunNotifications } from '@/components/application/run-notifications';
 import { Breadcrumb, BreadcrumbItem } from '@/components/base/breadcrumb/breadcrumb';
 import { Button } from '@/components/base/buttons/button';
 import { IconButton } from '@/components/base/buttons/icon-button';
 import { useRunHarness } from '@/hooks/useRunHarness';
-import { PIPELINES } from '@/lib/harness';
 import { cx } from '@/utils/cx';
 import { useAppStore } from '@/store';
 
@@ -48,12 +48,10 @@ export function AppLayout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const active = useAppStore((s) => s.active);
-  const selectedPipeline = useAppStore((s) => s.selectedPipeline);
   const loadCatalog = useAppStore((s) => s.loadCatalog);
   const loadRuns = useAppStore((s) => s.loadRuns);
   const { run, cancel, running } = useRunHarness();
   const selected = selectedKey(location.pathname);
-  const pipeline = PIPELINES[selectedPipeline];
 
   const crumbs = useMemo(() => {
     if (location.pathname === '/') return [{ label: 'Dashboard', current: true }];
@@ -143,7 +141,7 @@ export function AppLayout() {
                 disabled={!active}
                 onClick={() => void run()}
               >
-                Run {pipeline.label}
+                Run Extraction Arena
               </Button>
             )}
           </div>
@@ -154,6 +152,7 @@ export function AppLayout() {
           </div>
         </main>
       </div>
+      <RunNotifications />
     </div>
   );
 }
