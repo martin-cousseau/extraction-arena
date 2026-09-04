@@ -1,90 +1,61 @@
 # AGENTS.md
 
-An LLM vision-model evaluation dashboard that compares GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) against a per-document golden dataset. Built around first-responder rescue sheets (the seed dataset is the 4-page Tesla Cybertruck sheet). The app is built around a **canonical, versioned rescue-sheet JSON contract** (`rescue-sheet-ev-v1.1` — rich ISO-17840-style domain body + app envelope; v1.0 still migrates); arbitrary source/supplier/model JSON enters the system only through envelope-stamping / an adapter / VLM normalize into that contract.
+Extraction Arena compares GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) against a per-document golden dataset. Seed document: Tesla Cybertruck first-responder rescue sheet. Scoring, UI, persistence, and the extraction prompt all use the canonical `rescue-sheet-ev-v1.1` record (rich ISO-17840-style domain + app envelope; v1.0 still migrates). Arbitrary JSON enters only through envelope-stamping, the Tesla adapter, or VLM normalize.
 
-## Repository layout
+## Layout
 
-Monorepo with **two independent Node projects** (each has its own `package.json`; this is *not* a workspace):
-- `backend/` — Express + TypeScript. Installs/runs on its own.
-- `frontend/` — Vite + React 18 + TypeScript. Installs/runs on its own.
+Two independent Node projects (not a workspace). The root `package.json` only has convenience scripts (`npm run dev` starts both).
 
-`backend/` and `frontend/` live at the repo root (the `llm-pdf-evaluator/` prefix in the spec is a project label, not an extra nesting level).
+- `backend/` — Express + TypeScript. `POST /api/extract` (PDF→PNG at 300 DPI) and `POST /api/llm` (pass-through vision proxy).
+- `frontend/` — Vite + React 18 + TypeScript. Datasets in IndexedDB; scoring in `lib/evaluation/`.
 
-## Architecture rule (easy to violate)
+## Backend
 
-The **backend has two stateless routes:**
-- `POST /api/extract` — PDF→PNG conversion (multipart upload → base64 PNGs at 300 DPI).
-- `POST /api/llm` — a same-origin **pass-through proxy** for the vision calls. The frontend builds the OpenAI-compatible request (model, messages, prompt, images, `temperature`, `response_format`) and POSTs `{ endpoint, apiKey, payload }`; the backend forwards it verbatim and returns the upstream body. **This exists because of CORS:** Z.AI, OpenAI, and xAI do not send `Access-Control-Allow-Origin`, so a direct browser `fetch` can't read the response (Z.AI: request lands, response blocked → Safari's "Load failed") or fails the preflight (OpenAI: request never lands). Do not call the providers directly from the browser, and do not put LLM/scoring logic in the backend — it only forwards.
+The LLM route exists because Z.AI, OpenAI, and xAI omit `Access-Control-Allow-Origin`. The frontend builds the OpenAI-compatible request and POSTs `{ endpoint, apiKey, payload }`; the backend forwards it and returns the upstream body. Do not call providers from the browser. Do not put scoring in the backend.
 
-Keys still live client-side (`VITE_` env, editable in Settings) and are passed through the LLM proxy; the backend never stores them.
+Keys stay client-side (`VITE_*`, editable in Settings) and are forwarded through the proxy. The backend never stores them.
 
-## Datasets (the core unit of work)
-
-## Canonical rescue-sheet contract (the core invariant)
-
-Everything the UI, persistence, scoring, metrics, and extraction prompt rely on is a **canonical, versioned record**: `rescue-sheet-ev-v1.1` (types in `frontend/src/lib/canonical/schema.ts`, JSON Schema Draft 2020-12 boundary in `schema.json`). **Arbitrary JSON is never the core input** for scoring — it is envelope-stamped (rich domain gold), adapted (free-form Tesla bag), or VLM-normalized. Pipeline:
+## Canonical contract
 
 ```
-pasted golden JSON / OEM JSON / LLM output
-              │
-              ▼
-   rich domain?  → stampRichEnvelope (identity_rich)
-   free-form?    → Tesla adapter (registry: ONE adapter)
-   VLM output?   → normalizeVlmToDraft (not the registry)
-              │
-              ▼
-   canonical rescue-sheet-ev-v1.1 draft
-              │
-              ▼
-   JSON Schema + domain-rule validation  (canonical/validate.ts)
-              │
-              ▼
-   project() → flat path→value map  (canonical/project.ts)
-              │
-              ▼
-   existing scoring / metrics / UI
+paste / OEM / model JSON
+        ├─ stampRichEnvelope     (rich ISO-style gold)
+        ├─ Tesla adapter         (free-form { golden_extraction }; only registry adapter)
+        └─ normalizeVlmToDraft   (live model JSON; not in the registry)
+                ▼
+        rescue-sheet-ev-v1.1 → validate → project() → score
 ```
 
-- **Two stored representations per dataset** (`lib/canonical/ingest.ts` produces both):
-  - `canonical: RescueSheetV1` — the source of truth (rich nested domain + envelope).
-  - `rawSource: RawSourceRecord` — the unmodified pasted JSON, kept for audit/reprocessing (never read directly by the app).
-  - `golden: GoldenDataset` — a **derived projection** of `canonical` (via `goldenProjection()`), kept so the original scoring/metrics/UI modules run unchanged. It is read-only; edit `canonical` instead.
-- **Adapters** (`canonical/adapters/`): one per free-form source shape. The registry holds a SINGLE adapter — `TeslaRescueSheetAdapter` — which maps `{ golden_extraction: {...} }` to v1.1, preserving unrecognized keys under `legacy_fields`. **Rich ISO-style gold** (nested `disable_direct_hazards`, `warnings`, HV under `vehicle.propulsion`) is accepted via **envelope stamp** (`stampRichEnvelope`) — not the Tesla key table. **Vision-model output** uses `normalizeVlmToDraft()` (`canonical/vlm.ts`).
-- **Energy enum:** models and scoring prefer `battery_electric`; ingest normalizes free-form `"electricity"` → `battery_electric`.
-- **Validation never blocks** (`canonical/validate.ts`): structural (ajv 2020-12) + domain rules (step sequencing, positive durations/voltages, dangling evidence/source-page refs, missing-evidence warnings) + a separate **publish gate**. Problems are `Issue[]`, not thrown.
-- **No coordinates.** Evidence is page-level; locations use `location_descriptor` (or legacy `location.value`), not bounding boxes.
-- **Lifecycle is metadata + rules only** (no review-queue UI): `raw | draft | validated | reviewed | published | rejected | legacy` (`canonical/lifecycle.ts`).
+Per dataset (`lib/canonical/ingest.ts`):
 
-## Datasets (the core unit of work)
+- `canonical` — source of truth
+- `rawSource` — unmodified paste (audit only)
+- `golden` — derived flat projection for scoring/UI (read-only)
 
-A **dataset** = `{ name, pdfName, dpi, pages[], canonical, golden, rawSource }`, created via the "Create Dataset" dialog (name → PDF upload → golden JSON paste) and **persisted locally in IndexedDB** (`lib/db.ts`, DB v2), so it survives app restarts. Multiple named datasets can coexist and be selected from the sidebar.
+Validation (`canonical/validate.ts`) never throws; problems are `Issue[]`. Evidence is page-level (`location_descriptor`), not bounding boxes. Lifecycle is metadata + rules (`canonical/lifecycle.ts`); there is no review-queue UI.
 
-- The pasted JSON is the **raw source**. Rich domain gold is envelope-stamped; free-form bags use the Tesla adapter. Validation runs; the **projection** is what gets scored in Ground Truth / metrics.
-- The extraction prompt (`buildCanonicalPrompt` in `canonical/prompt.ts`) **always** sends the **full empty v1.1 nested skeleton** (placeholders only) — **never golden answers**, and **not** a gold-gated subset of fields. Scoring still only compares paths present on this dataset's projection.
-- Page images are stored inline (base64 data URLs) in IndexedDB; a dataset can be re-run offline once created.
-- **Pre-v1 datasets are migrated lazily** on load (`migrateLegacyDataset`): their free-form `golden_extraction` is re-run through the Tesla adapter to produce a `canonical` record, and the original projection is preserved.
+A dataset is created via **Create Dataset** (name → PDF → golden JSON) and stored in IndexedDB (`lib/db.ts`, DB v2). The extraction prompt (`buildCanonicalPrompt`) sends the full empty v1.1 skeleton — never golden answers. Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
+
+Details: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/README.md).
 
 ## Hard constraints
 
-- **`pdfjs-dist` is pinned to `3.11.174`** in `backend/`. v4+'s worker bootstrap calls `process.getBuiltinModule()`, which only exists on Node 20.16+/22+. Do not bump it unless the runtime Node is also upgraded. Backend uses `@napi-rs/canvas` + global `Path2D`/`ImageData`/`DOMMatrix` polyfills so no poppler/imagemagick binaries are required.
-- **`NodeCanvasFactory.destroy` must stay a no-op.** `@napi-rs/canvas` throws `Failed to unwrap exclusive reference of CanvasElement` if you set `canvas.width = 0` (the default `BaseCanvasFactory.destroy`) while its 2D context still holds a shared borrow. This only triggers on image-heavy PDFs (cached intermediate canvases), so it passes on simple test PDFs and bites in production. GC reclaims the canvases once pdf.js drops them.
-- **`pdfjs-dist` pulls in `canvas` (node-canvas) as an optional dependency.** It coexists with `@napi-rs/canvas`; the factory passed to `getDocument({ canvasFactory })` is what actually renders, so keep routing it explicitly.
-- **PDF→PNG at exactly 300 DPI.** Not 72, not 4K.
-- **Accuracy scoring is real and canonical-driven:** one evaluation engine (`lib/evaluation/`) scores the flat projection (`canonical/project.ts`). Per-field: exact gate match, partial credit, and precision/recall/F1 from the **same** alignments. Array geometry is smart by path (`ordered_steps` → sequence; `warnings`/inventories → set) with per-field override. The main comparison UI and Metrics dashboard consume that single result. Never mock or fake scores.
-- **No placeholder API calls.** Both models are called for real with live keys.
-- **Normalize + validate every model JSON output to the canonical contract** before display/scoring: `normalizeVlmToDraft` (`canonical/vlm.ts`) → `validate` → `project`. Issues are surfaced, never thrown.
+- **`pdfjs-dist` is pinned to `3.11.174`.** v4’s worker bootstrap needs `process.getBuiltinModule()` (Node 20.16+/22+). Backend uses `@napi-rs/canvas` plus `Path2D`/`ImageData`/`DOMMatrix` polyfills.
+- **`NodeCanvasFactory.destroy` must stay a no-op.** Setting `canvas.width = 0` throws `Failed to unwrap exclusive reference of CanvasElement` while the 2D context holds a shared borrow. Hits image-heavy PDFs; simple test PDFs miss it.
+- Route pdf.js through the factory passed to `getDocument({ canvasFactory })`. The optional `canvas` (node-canvas) dependency that pdf.js pulls in is unused for rendering.
+- PDF→PNG at exactly **300 DPI**.
+- One evaluation engine (`lib/evaluation/`) on the flat projection. Exact, partial, and P/R/F1 share alignments. Array geometry is path-aware (`ordered_steps` → sequence; `warnings`/inventories → set). Never mock scores.
+- Exact prefers sheet-supported `source_text` over internal action/class IDs when both exist.
+- All three models are live calls with real keys.
+- Normalize + validate every model JSON (`normalizeVlmToDraft` → `validate` → `project`). Issues are surfaced, never thrown.
 
 ## Sentinels
 
-Absent scalar field → literal string **`"not_found"`** (not `null`, not `""`). Absent array → `[]`. Absent object → `{}`. Scoring treats all three as "absent" and matches two absent values as a correct match.
+Absent scalar → `"not_found"`. Absent array → `[]`. Absent object → `{}`. Scoring treats all three as absent; two absents match.
 
-## API integration
+## Vision calls
 
-Both endpoints are OpenAI-compatible chat-completions with vision. For each call:
-- `temperature: 0`
-- `response_format: { type: "json_object" }`
-- Multimodal `content` array: the dataset-driven extraction prompt + one `{ type: "image_url", image_url: { url: "data:image/png;base64,..." } }` per converted page
-- Calls go through the backend `/api/llm` pass-through (CORS bypass), not directly to the provider.
+`temperature: 0`, `response_format: { type: "json_object" }`, multimodal content: extraction prompt + one `image_url` per page. Always via `/api/llm`.
 
 | Model | Endpoint | Model ID |
 |---|---|---|
@@ -92,17 +63,14 @@ Both endpoints are OpenAI-compatible chat-completions with vision. For each call
 | GPT-5.4 mini | `https://api.openai.com/v1/chat/completions` | `gpt-5.4-mini` |
 | Grok 4.5 | `https://api.x.ai/v1/chat/completions` | `grok-4.5` |
 
-Z.AI and xAI use `Authorization: Bearer $KEY` and are OpenAI-compatible — don't look for a separate SDK.
+Bearer auth. No separate SDKs.
 
-## Environment / security gotcha
+`VITE_` keys are exposed to the browser on purpose for this demo. If calls ever move server-side, drop the prefix.
 
-Keys use the `VITE_` prefix (`VITE_OPENAI_API_KEY`, `VITE_ZAI_API_KEY`, `VITE_XAI_API_KEY`). Vite exposes any `VITE_`-prefixed var to the browser bundle. This is **intentional** for this demo (frontend calls APIs directly). If you ever move calls server-side, drop the `VITE_` prefix so keys aren't shipped to the client.
+## UI
 
-## UI conventions (repo-specific)
+Dark is the default. Settings includes a light/dark toggle. Backgrounds `#0A0A0F` / `#12121A` in dark.
 
-- **Dark mode is the default and only theme.** Backgrounds `#0A0A0F` / `#12121A`.
-- **Per-column accent colors are fixed and reused everywhere** (borders, glows, badges, JSON syntax highlighting, gauge fill):
-  - Ground Truth `#10B981` · GLM-5V-Turbo `#06B6D4` · GPT-5.4 mini `#8B5CF6` · Grok 4.5 `#F43F5E`
-- Columns always render left-to-right in that order.
-- Minimum font size **14px** (demo is recorded for mobile LinkedIn viewing).
-- All animations must complete within ~3–5s and stay smooth on a modern laptop — no particle systems, 3D, video, sound, or cursor trails.
+Column accents, left to right: Ground Truth `#10B981` · GLM-5V-Turbo `#06B6D4` · GPT-5.4 mini `#8B5CF6` · Grok 4.5 `#F43F5E`.
+
+Minimum font size 14px. Animations finish in ~3–5s; no particle systems, 3D, video, sound, or cursor trails.

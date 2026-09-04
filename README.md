@@ -1,63 +1,58 @@
-![Extraction Arena](github_banner.jpg)
+![Extraction Arena](docs/assets/banner.jpg)
 
 # Extraction Arena
 
-LLM vision-model evaluation dashboard. Create a **dataset** (upload a PDF + paste its golden rescue-sheet JSON), then run GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) side-by-side and score each field against the golden truth. The seed dataset is the 4-page Tesla Cybertruck first-responder rescue sheet. The app is built around a **canonical, versioned rescue-sheet JSON contract** (`rescue-sheet-ev-v1.1` rich domain + envelope; v1.0 still migrates); pasted/OEM/model JSON is envelope-stamped or adapted into that contract and validated before it is scored. **Datasets persist locally (IndexedDB) and survive restarts.**
+Compare vision models on first-responder rescue sheets. Upload a PDF, paste its golden JSON, then run GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) side by side. Each field is scored against a versioned `rescue-sheet-ev-v1.1` record. Datasets live in the browser (IndexedDB) and survive restarts.
 
-## Architecture
-
-Two independent Node projects (this is **not** a workspace — install and run each separately):
-
-- `backend/` — Express + TypeScript. Converts PDFs to PNG pages at exactly 300 DPI (`POST /api/extract`) and proxies the OpenAI-compatible vision calls (`POST /api/llm`). Uses `pdfjs-dist` + `@napi-rs/canvas` so it runs with no system binaries.
-- `frontend/` — Vite + React 18 + TypeScript + Tailwind + shadcn/ui + Framer Motion. Manages datasets in IndexedDB, calls the backend routes, and scores GLM/GPT/Grok outputs against the golden dataset.
+The seed document is Tesla’s public 4-page Cybertruck rescue sheet. Fixture wording taken from that sheet remains Tesla’s.
 
 ## Quick start
 
-```bash
-# 1. Backend (PDF → PNG @ 300 DPI)
-cd backend && npm install
-cp .env.example .env   # optional: backend port override
-npm run dev            # http://localhost:3001
+`backend/` and `frontend/` are independent packages. From the repo root:
 
-# 2. Frontend (in another terminal)
-cd frontend && npm install
-cp .env.example .env   # then add VITE_ZAI_API_KEY, VITE_OPENAI_API_KEY, VITE_XAI_API_KEY
-npm run dev            # http://localhost:5173
+```bash
+npm install
+npm run install:all
+cp frontend/.env.example frontend/.env   # add VITE_ZAI_API_KEY, VITE_OPENAI_API_KEY, VITE_XAI_API_KEY
+npm run dev
 ```
 
-Open http://localhost:5173 → **+ Create dataset** → enter a name, upload the PDF, paste the golden extraction JSON. Then press **Run Extraction**.
+- Frontend → http://localhost:5173
+- Backend → http://localhost:3001 (`POST /api/extract`, `POST /api/llm`)
 
-## Docker (entire app in containers)
+Or run them separately: `npm run dev --prefix backend` and `npm run dev --prefix frontend`.
+
+Open http://localhost:5173 → **+ Create dataset** → name, PDF, golden JSON → **Run Extraction**.
+
+## Docker
 
 ```bash
-cp .env.example .env   # add VITE_ZAI_API_KEY + VITE_OPENAI_API_KEY + VITE_XAI_API_KEY
+cp .env.example .env   # add the three VITE_* keys
 docker compose up --build
 ```
 
-- Frontend → http://localhost:5173 (nginx serves the Vite build + proxies `/api/*` to the backend container)
-- Backend → http://localhost:3001 (internal, also exposed for debugging)
+Frontend is at http://localhost:5173 (nginx proxies `/api/*` to the backend). Backend is also on http://localhost:3001.
 
-## Datasets
+## Canonical contract
 
-A dataset = `{ name, pdfName, dpi, pages[], canonical, golden, rawSource, fieldEvalConfigs? }`. The pasted JSON is the **raw source**; rich ISO-style gold is envelope-stamped into **canonical** `rescue-sheet-ev-v1.1`, free-form `{ golden_extraction }` goes through the Tesla adapter, validation runs (structural JSON Schema + domain rules), and a **golden projection** (flat path → value map) is derived for evaluation. Unrecognized free-form keys are preserved under `legacy_fields` (never lost). A **single evaluation engine** (`frontend/src/lib/evaluation/`) produces exact match, partial credit, and P/R/F1; the comparison columns and Metrics dashboard show the same results (dashboard adds charts and per-field config). Array fields default to **sequence** for ordered steps and **set** for warnings/inventories. Extraction always prompts with the full empty v1.1 skeleton (never golden answers). Model output is normalized (`normalizeVlmToDraft`) then projected and scored. Multiple named datasets can coexist; all are stored locally in IndexedDB. Pre-v1 datasets are migrated lazily on load.
+Pasted OEM JSON and model output are normalized into `rescue-sheet-ev-v1.1` before scoring. Scoring uses a derived flat projection of that record, not the raw paste. Ingest paths, adapters, and the empty extraction skeleton: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/README.md).
 
 ## Environment
 
-Frontend keys (in `frontend/.env`):
+Frontend (`frontend/.env`):
 
 | Var | Purpose |
 |---|---|
-| `VITE_ZAI_API_KEY` | GLM-5V-Turbo via `https://api.z.ai/api/paas/v4/chat/completions` |
-| `VITE_OPENAI_API_KEY` | GPT-5.4 mini via `https://api.openai.com/v1/chat/completions` |
-| `VITE_XAI_API_KEY` | Grok 4.5 via `https://api.x.ai/v1/chat/completions` |
+| `VITE_ZAI_API_KEY` | GLM-5V-Turbo — `https://api.z.ai/api/paas/v4/chat/completions` |
+| `VITE_OPENAI_API_KEY` | GPT-5.4 mini — `https://api.openai.com/v1/chat/completions` |
+| `VITE_XAI_API_KEY` | Grok 4.5 — `https://api.x.ai/v1/chat/completions` |
 
-The `VITE_` prefix is intentional — Vite exposes these to the browser. The keys stay in the browser and are forwarded only through the same-origin `/api/llm` proxy so the providers' missing CORS headers do not break the app.
+Vite exposes `VITE_*` vars to the browser. Keys stay client-side and are forwarded through the same-origin `/api/llm` proxy (the providers do not send CORS headers).
 
-Backend settings (in `backend/.env`):
+Backend (`backend/.env`): optional `PORT` (default `3001`).
 
-| Var | Purpose |
-|---|---|
-| `PORT` | Optional backend port override (defaults to `3001`) |
+Repo conventions: [`AGENTS.md`](AGENTS.md).
 
-See `AGENTS.md` for repo conventions and hard constraints.
-# extraction-arena
+## License
+
+MIT. See [LICENSE](LICENSE).
