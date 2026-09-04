@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import { WordDiff } from '@/components/arena/word-diff';
 import { Chip } from '@/components/base/badges/chip';
 import { Select, SelectItem } from '@/components/base/select/select';
@@ -11,8 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/base/table/table';
-import { PageHeader, Surface } from '@/app/layout';
-import { humanLabel, valueKind, type GoldenValue } from '@/lib/dataset';
+import { Surface } from '@/app/layout';
+import { humanLabel, valueKind, type DatasetRecord, type GoldenValue } from '@/lib/dataset';
 import { PIPELINES } from '@/lib/harness';
 import { useAppStore } from '@/store';
 
@@ -22,50 +21,36 @@ function asText(value: GoldenValue | undefined): string {
   return JSON.stringify(value);
 }
 
-export function GroundTruthPage() {
-  const { id } = useParams();
-  const active = useAppStore((s) => s.active);
+export function GroundTruthPanel({ dataset }: { dataset: DatasetRecord }) {
   const runs = useAppStore((s) => s.runs);
-  const selectDataset = useAppStore((s) => s.selectDataset);
   const [runId, setRunId] = useState<string>('');
   const [openKey, setOpenKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id && active?.id !== id) void selectDataset(id);
-  }, [id, active?.id, selectDataset]);
-
   const completed = useMemo(
-    () => runs.filter((r) => r.datasetId === active?.id && r.status === 'completed'),
-    [runs, active?.id]
+    () => runs.filter((r) => r.datasetId === dataset.id && r.status === 'completed'),
+    [runs, dataset.id],
   );
   const selected = completed.find((r) => r.id === runId) ?? completed[0];
-
-  if (!active) return <p className="text-body-regular text-text-secondary">Select a dataset.</p>;
-
-  const entries = Object.entries(active.golden.golden_extraction);
+  const entries = Object.entries(dataset.golden.golden_extraction);
 
   return (
-    <div>
-      <PageHeader
-        title="Ground truth"
-        description="Golden fields for this dataset. Expand a row to diff against a completed run."
-        actions={
-          completed.length > 0 ? (
-            <Select
-              aria-label="Compare run"
-              selectedKey={selected?.id}
-              onSelectionChange={(key) => setRunId(String(key))}
-            >
-              {completed.map((run) => (
-                <SelectItem key={run.id} id={run.id}>
-                  {PIPELINES[run.pipelineId].label} · {new Date(run.startedAt).toLocaleString()}
-                </SelectItem>
-              ))}
-            </Select>
-          ) : undefined
-        }
-      />
-      <Surface className="p-0 overflow-hidden">
+    <div className="flex flex-col gap-3">
+      {completed.length > 0 && (
+        <div className="flex justify-end">
+          <Select
+            aria-label="Compare run"
+            selectedKey={selected?.id}
+            onSelectionChange={(key) => setRunId(String(key))}
+          >
+            {completed.map((run) => (
+              <SelectItem key={run.id} id={run.id}>
+                {PIPELINES[run.pipelineId].label} · {new Date(run.startedAt).toLocaleString()}
+              </SelectItem>
+            ))}
+          </Select>
+        </div>
+      )}
+      <Surface className="overflow-hidden p-0">
         <Table aria-label="Ground truth fields">
           <TableHeader>
             <TableColumn isRowHeader>Field</TableColumn>

@@ -64,11 +64,7 @@ export function AppLayout() {
       ];
     }
     if (location.pathname.startsWith('/datasets/') && active) {
-      const tail = location.pathname.endsWith('/ground-truth')
-        ? 'Ground truth'
-        : location.pathname.endsWith('/config')
-          ? 'Eval config'
-          : 'Overview';
+      const tail = location.pathname.endsWith('/config') ? 'Eval config' : 'Ground truth';
       return [
         { label: 'Datasets', href: '/datasets' },
         { label: active.name, href: `/datasets/${active.id}` },
@@ -133,7 +129,6 @@ export function AppLayout() {
                   </BreadcrumbItem>
                 ))}
               </Breadcrumb>
-              <p className="mt-1 text-title-3-semibold text-text-primary">Extraction Arena</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-3">

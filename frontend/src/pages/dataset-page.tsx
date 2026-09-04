@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
 import { FileUpload } from '@/components/base/file-upload/file-upload';
 import { Chip } from '@/components/base/badges/chip';
-import { Button } from '@/components/base/buttons/button';
+import { Pagination } from '@/components/base/pagination/pagination';
+import { Tab, TabList, TabPanel, Tabs } from '@/components/base/tabs/tabs';
 import { PageHeader, Surface } from '@/app/layout';
 import { convertPdfToPages } from '@/lib/api';
 import type { DatasetRecord } from '@/lib/dataset';
 import { validate } from '@/lib/canonical/validate';
+import { EvalConfigPanel } from '@/pages/golden-config-page';
+import { GroundTruthPanel } from '@/pages/ground-truth-page';
 import { useAppStore } from '@/store';
-import { cx } from '@/utils/cx';
+
+type DatasetTab = 'ground-truth' | 'config';
+
+function tabFromPath(pathname: string): DatasetTab {
+  return pathname.endsWith('/config') ? 'config' : 'ground-truth';
+}
 
 export function DatasetPage() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const active = useAppStore((s) => s.active);
   const selectDataset = useAppStore((s) => s.selectDataset);
@@ -19,6 +29,18 @@ export function DatasetPage() {
   const updateActiveDataset = useAppStore((s) => s.updateActiveDataset);
   const [page, setPage] = useState(1);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfOpen, setPdfOpen] = useState(true);
+  const [tab, setTab] = useState<DatasetTab>(() => tabFromPath(location.pathname));
+
+  useEffect(() => {
+    setPage(1);
+    setPdfError(null);
+    setPdfOpen(true);
+  }, [id]);
+
+  useEffect(() => {
+    setTab(tabFromPath(location.pathname));
+  }, [location.pathname]);
 
   useEffect(() => {
     if (id && active?.id !== id) void selectDataset(id);
@@ -36,16 +58,6 @@ export function DatasetPage() {
       <PageHeader
         title={active.name}
         description={`${active.pdfName} · ${active.pageCount} pages · ${active.fieldCount} fields · ${active.canonical.schema_version}`}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => navigate(`/datasets/${active.id}/ground-truth`)}>
-              Ground truth
-            </Button>
-            <Button variant="secondary" onClick={() => navigate(`/datasets/${active.id}/config`)}>
-              Eval config
-            </Button>
-          </>
-        }
       />
       <div className="mb-4 flex flex-wrap gap-2">
         <Chip>{active.canonical.lifecycle_status}</Chip>
@@ -62,6 +74,9 @@ export function DatasetPage() {
           <FileUpload
             allowedExtensions={['pdf']}
             maxBytes={10 * 1024 * 1024}
+            lockOnComplete
+            processingLabel="Converting at 300 DPI…"
+            completeLabel="Converted successfully!"
             onUploadComplete={async (file) => {
               setPdfError(null);
               try {
@@ -74,55 +89,76 @@ export function DatasetPage() {
                 } as Partial<DatasetRecord>);
                 await attachPdf(file, converted.pdfName);
               } catch (e) {
-                setPdfError(e instanceof Error ? e.message : 'Upload failed.');
+                const message = e instanceof Error ? e.message : 'Upload failed.';
+                setPdfError(message);
+                throw e instanceof Error ? e : new Error(message);
               }
             }}
           />
         </Surface>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Surface>
-          <p className="mb-3 text-headline-semibold">Pages</p>
-          {current ? (
-            <img
-              src={current.dataUrl}
-              alt={`Page ${current.page}`}
-              className="w-full rounded-2xl border border-border-button-default"
-            />
-          ) : (
-            <p className="text-body-regular text-text-secondary">No pages.</p>
+      {current && (
+        <Surface className="mb-4">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+            aria-label={pdfOpen ? 'Hide PDF' : 'Show PDF'}
+            aria-expanded={pdfOpen}
+            aria-controls="dataset-pdf-viewer"
+            onClick={() => setPdfOpen((open) => !open)}
+          >
+            <span className="text-headline-semibold text-text-primary">Pages</span>
+            <span className="flex items-center gap-2">
+              <span className="text-body-regular text-text-secondary">
+                {current.page} / {active.pages.length}
+              </span>
+              {pdfOpen ? (
+                <RiArrowUpSLine className="size-5 text-foreground-icon-secondary" aria-hidden />
+              ) : (
+                <RiArrowDownSLine className="size-5 text-foreground-icon-secondary" aria-hidden />
+              )}
+            </span>
+          </button>
+          {pdfOpen && (
+            <div id="dataset-pdf-viewer">
+              <img
+                src={current.dataUrl}
+                alt={`Page ${current.page}`}
+                className="mx-auto mt-3 max-h-[520px] w-auto max-w-full rounded-2xl border border-border-button-default"
+              />
+              <Pagination
+                className="mt-3"
+                page={current.page}
+                totalPages={active.pages.length}
+                onChange={setPage}
+              />
+            </div>
           )}
-          <div className="mt-3 flex flex-wrap gap-1">
-            {active.pages.map((p) => (
-              <button
-                key={p.page}
-                type="button"
-                onClick={() => setPage(p.page)}
-                className={cx(
-                  'rounded-lg px-2 py-1 text-caption-1-medium',
-                  p.page === current?.page
-                    ? 'bg-accent-100 text-accent-700'
-                    : 'bg-background-secondary-default text-text-secondary',
-                )}
-              >
-                {p.page}
-              </button>
-            ))}
-          </div>
         </Surface>
-        <Surface className="min-h-[320px] overflow-auto">
-          <p className="mb-3 text-headline-semibold">Canonical record</p>
-          <pre className="overflow-auto whitespace-pre-wrap font-mono text-body-2-regular text-text-secondary">
-            {JSON.stringify(active.canonical, null, 2)}
-          </pre>
-        </Surface>
-      </div>
-      <p className="mt-4 text-body-regular text-text-tertiary">
-        <Link to="/datasets" className="text-button-ghost-foreground hover:underline">
-          Back to catalog
-        </Link>
-      </p>
+      )}
+
+      <Tabs
+        selectedKey={tab}
+        onSelectionChange={(key) => {
+          if (!id) return;
+          const next: DatasetTab = String(key) === 'config' ? 'config' : 'ground-truth';
+          if (next === tab) return;
+          setTab(next);
+          navigate(next === 'config' ? `/datasets/${id}/config` : `/datasets/${id}/ground-truth`);
+        }}
+      >
+        <TabList aria-label="Dataset views">
+          <Tab id="ground-truth">Ground Truth</Tab>
+          <Tab id="config">Eval Config</Tab>
+        </TabList>
+        <TabPanel id="ground-truth">
+          <GroundTruthPanel dataset={active} />
+        </TabPanel>
+        <TabPanel id="config">
+          <EvalConfigPanel dataset={active} />
+        </TabPanel>
+      </Tabs>
     </div>
   );
 }

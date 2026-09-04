@@ -1,8 +1,5 @@
-import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
 import { SegmentedControl, SegmentedControlItem } from '@/components/base/segmented-control/segmented-control';
-import { PageHeader } from '@/app/layout';
-import { humanLabel, valueKind } from '@/lib/dataset';
+import { humanLabel, valueKind, type DatasetRecord } from '@/lib/dataset';
 import { useAppStore, useFieldMetricConfig } from '@/store';
 
 function FieldConfigRow({ fieldKey, kind }: { fieldKey: string; kind: string }) {
@@ -57,30 +54,14 @@ function FieldConfigRow({ fieldKey, kind }: { fieldKey: string; kind: string }) 
   );
 }
 
-export function GoldenConfigPage() {
-  const { id } = useParams();
-  const active = useAppStore((s) => s.active);
-  const selectDataset = useAppStore((s) => s.selectDataset);
-
-  useEffect(() => {
-    if (id && active?.id !== id) void selectDataset(id);
-  }, [id, active?.id, selectDataset]);
-
-  if (!active) return <p className="text-body-regular text-text-secondary">Select a dataset.</p>;
-
-  const entries = Object.entries(active.golden.golden_extraction);
+export function EvalConfigPanel({ dataset }: { dataset: DatasetRecord }) {
+  const entries = Object.entries(dataset.golden.golden_extraction);
 
   return (
-    <div>
-      <PageHeader
-        title="Eval config"
-        description="Per-field match strategy, list geometry, and precision/recall priority. These settings drive scoring."
-      />
-      <ul className="flex flex-col gap-2">
-        {entries.map(([key, field]) => (
-          <FieldConfigRow key={key} fieldKey={key} kind={valueKind(field.value)} />
-        ))}
-      </ul>
-    </div>
+    <ul className="flex flex-col gap-2">
+      {entries.map(([key, field]) => (
+        <FieldConfigRow key={key} fieldKey={key} kind={valueKind(field.value)} />
+      ))}
+    </ul>
   );
 }
