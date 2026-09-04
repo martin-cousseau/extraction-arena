@@ -21,22 +21,7 @@ export interface RunResult {
   grok: ModelResult;
 }
 
-/**
- * Orchestrates live vision-model calls (GLM-5V-Turbo, GPT-5.4 mini, Grok 4.5)
- * against the active dataset's dynamic field schema. Each model runs independently
- * based on its enabled flag in the store; disabled models are skipped entirely
- * (no API call, no status mutation). The enabled calls fire in parallel and each
- * model's raw JSON is coerced to the golden field shape inside `api.ts`.
- *
- * Results stream in independently: each model commits its own store slice (and thus
- * its column's loading → done/error transition) the moment its own response resolves.
- * There is no Promise.all-style barrier gating visibility, so a slow model never
- * blocks the display of a faster one. `run` only resolves once every spawned call has
- * settled, so the caller can clear the global "running" flag.
- *
- * Pass an AbortSignal to cancel in-flight calls: an aborted model reverts its column
- * to `idle` (no fake error), while models that already finished keep their results.
- */
+/** Live vision calls for enabled models. Results commit independently; abort reverts a column to idle. */
 export function useExtraction() {
   const active = useAppStore((s) => s.active);
   const customContexts = useAppStore((s) => s.customContexts);
@@ -115,10 +100,6 @@ export function useExtraction() {
 
       const result: Partial<RunResult> = {};
 
-      // Fire each model independently and commit its result to the store the
-      // moment its own response resolves, so a slow model never blocks the
-      // display of a faster one. There is no Promise.all-style barrier gating
-      // when results become visible — each task self-commits its own column.
       const commit = (key: ModelKey, value: ModelResult) => {
         setters[key](value);
         result[key] = value;
@@ -167,9 +148,7 @@ export function useExtraction() {
             });
           }
         } catch (reason) {
-          // A cancel should never read as an error: revert the column to idle so
-          // the spinner stops without showing a bogus failure message. Models
-          // that already resolved keep their committed results.
+          // Abort is not an error — revert this column to idle; finished models keep their results.
           if (isAbortError(reason) || signal?.aborted) {
             commit(key, idleResult(cfg.modelId, cfg.label));
             return;
@@ -178,9 +157,6 @@ export function useExtraction() {
         }
       });
 
-      // Await only so the caller knows when every spawned call has finished
-      // (used to clear the global "running" flag). Visibility of individual
-      // results is NOT gated on this — each `commit` above fires independently.
       await Promise.allSettled(tasks);
 
       return result;

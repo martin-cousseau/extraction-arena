@@ -6,16 +6,7 @@ import type {
 } from '../schema';
 import { SCHEMA_VERSION } from '../schema';
 
-/**
- * Adapter contract. Each adapter maps ONE source shape (e.g. Tesla's golden
- * JSON, a Euro NCAP payload, an OEM PDF parse) to the canonical
- * `rescue-sheet-ev-v1.1` draft. Adapters are tolerant of a source's
- * inconsistent key names but must always emit the same canonical structure.
- *
- * Per the architecture decision, the registry holds a SINGLE adapter today
- * (Tesla). Vision-model output does NOT use a registered adapter — it goes
- * through the built-in `normalizeVlmToDraft()` in `../vlm.ts`.
- */
+/** Maps one free-form OEM JSON shape to a `rescue-sheet-ev-v1.1` draft. */
 
 export interface SourceContext {
   /** Stable record id for the produced draft (e.g. the dataset id). */

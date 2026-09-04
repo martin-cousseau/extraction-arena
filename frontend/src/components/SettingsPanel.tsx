@@ -11,7 +11,6 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-/** Slide-over settings: API keys. Keys are masked. */
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const zaiKey = useAppStore((s) => s.zaiKey);
   const openaiKey = useAppStore((s) => s.openaiKey);

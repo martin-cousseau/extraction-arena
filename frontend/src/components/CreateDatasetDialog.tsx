@@ -195,12 +195,11 @@ export function CreateDatasetDialog({ open, onClose }: CreateDatasetDialogProps)
                   )}
                   <div className="rounded-md border border-border bg-background/60 p-2.5 text-[11px] text-muted-foreground">
                     <p className="mb-1 font-semibold text-foreground">How this is stored</p>
-                    Your JSON is the <span className="text-foreground">raw source</span>. Rich ISO-style gold is
-                    envelope-stamped into <code className="font-mono text-foreground">rescue-sheet-ev-v1.1</code>; free-form{' '}
+                    Your JSON is kept as the raw source. Rich ISO-style gold is envelope-stamped into{' '}
+                    <code className="font-mono text-foreground">rescue-sheet-ev-v1.1</code>; free-form{' '}
                     <code className="font-mono text-foreground">{'{ golden_extraction }'}</code> goes through the Tesla
-                    adapter. Ground Truth shows a derived projection for scoring; the full tree lives on{' '}
-                    <code className="font-mono text-foreground">canonical</code>. Extraction always uses the full empty
-                    v1.1 schema (never golden answers).
+                    adapter. Ground Truth scores a derived projection; the full tree lives on{' '}
+                    <code className="font-mono text-foreground">canonical</code>.
                   </div>
                 </div>
               )}

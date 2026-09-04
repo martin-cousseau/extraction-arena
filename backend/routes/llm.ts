@@ -7,16 +7,7 @@ import {
   summarizeVisionPayload,
 } from '../lib/log.js';
 
-/**
- * Same-origin pass-through for the vision-model providers.
- *
- * Both Z.AI and OpenAI omit CORS headers, so a browser `fetch` to their
- * endpoints either can't read the response (Z.AI: request lands, response is
- * blocked) or fails the preflight (OpenAI: request never lands). Routing
- * through here removes CORS from the equation. The backend is otherwise
- * stateless: it forwards exactly what the frontend built and returns the
- * upstream body verbatim so token/cost parsing in the client stays unchanged.
- */
+/** Same-origin pass-through: forwards the frontend's OpenAI-compatible payload and returns the upstream body. */
 const router = Router();
 
 /**
@@ -75,18 +66,9 @@ router.post('/llm', async (req, res) => {
     });
   }
 
-  // Forward client cancellation: when the browser (or the Vite proxy in front
-  // of us) drops the downstream request, abort the in-flight upstream fetch so
-  // we stop paying for a result nobody will read.
-  //
-  // CRITICAL: we listen on `res`, not `req`. Since Node 16, `req`'s 'close'
-  // event fires the moment the *request body* has been fully consumed (i.e.
-  // right after `express.json()` finishes), not when the client disconnects —
-  // so `req.on('close')` would abort every single call immediately. `res`'s
-  // 'close' fires when the response stream closes (either because we finished
-  // sending it, or because the client dropped the connection first); the
-  // `writableEnded` guard tells the two apart so we only abort on a real
-  // disconnect.
+  // Listen on `res`, not `req`. Since Node 16, `req` 'close' fires when the
+  // request body is consumed (right after express.json()), not on disconnect.
+  // `res` 'close' + !writableEnded is a real client drop.
   const abortUpstream = (controller: AbortController) => {
     const onClose = () => {
       if (!res.writableEnded) controller.abort();

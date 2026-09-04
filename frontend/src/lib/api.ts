@@ -97,13 +97,7 @@ export async function convertPdfToPages(
   }));
   return { dpi: data.dpi, pages, pdfName: file.name };
 }
-/**
- * Call an OpenAI-compatible vision endpoint (Z.AI GLM-5V-Turbo, OpenAI gpt-5.4-mini,
- * or xAI grok-4.5). Sends every page image + the canonical-schema-driven prompt.
- * temperature: 0 and response_format: json_object per the fixed integration spec.
- * The raw model JSON is normalized to a canonical draft, validated, then projected
- * to the field map the scorer consumes.
- */
+/** Vision call via `/api/llm`; response is normalized, validated, then projected. */
 export async function callVisionModel(
   config: VisionConfig,
   pages: PageImage[],
@@ -192,9 +186,6 @@ async function callVisionOnce(
   const res = await fetch('/api/llm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    // Route through the backend pass-through to avoid browser CORS: Z.AI, OpenAI,
-    // and xAI do not return CORS headers, so direct browser fetches can't read
-    // the response. The backend forwards endpoint + Authorization verbatim.
     signal,
     body: JSON.stringify({
       endpoint: config.endpoint,
@@ -285,7 +276,7 @@ export interface LlmJsonCallOptions {
 
 /**
  * Text-only OpenAI-compatible chat completion expecting a JSON object body.
- * Used by the semantic judge (no images). Routes through `/api/llm` for CORS.
+ * Used by the semantic judge (no images). Routes through `/api/llm`.
  */
 export async function callLlmJson(options: LlmJsonCallOptions): Promise<unknown> {
   const messages: Array<{ role: string; content: string }> = [];

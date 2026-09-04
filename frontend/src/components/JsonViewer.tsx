@@ -10,11 +10,6 @@ interface JsonViewerProps {
   className?: string;
 }
 
-/**
- * Syntax-highlighted JSON view of a model's extracted record. Strings are
- * rendered in the column's accent color, arrays/brackets in white, keys in
- * muted. Optional typewriter reveal that always finishes within ~1.5s.
- */
 export function JsonViewer({ data, accent, typewriter = false, className }: JsonViewerProps) {
   const fullText = JSON.stringify(data, null, 2);
   if (typewriter) {

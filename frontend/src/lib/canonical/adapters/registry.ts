@@ -1,14 +1,7 @@
 import type { RescueSheetAdapter, SourceContext, NormalizeResult } from './types';
 import { TeslaRescueSheetAdapter } from './tesla';
 
-/**
- * Adapter registry. Per the architecture decision this holds a SINGLE adapter
- * (Tesla). Vision-model output does NOT go through the registry — it uses the
- * built-in `normalizeVlmToDraft()` in `../vlm.ts`.
- *
- * Adding a future OEM adapter = append it to this array + implement the
- * `RescueSheetAdapter` interface. Nothing else in the app changes.
- */
+/** Registry of free-form OEM adapters. VLM output uses `normalizeVlmToDraft`, not this list. */
 export const ADAPTERS: RescueSheetAdapter[] = [TeslaRescueSheetAdapter];
 
 /** Find the first adapter that recognizes the source, or null. */
@@ -32,5 +25,3 @@ export function normalizeWithAdapter(
   if (!adapter) return null;
   return adapter.normalize(input, context);
 }
-
-export { TeslaRescueSheetAdapter };

@@ -30,9 +30,6 @@ export default function App() {
 
   const extraction = useExtraction();
 
-  // Per-run abort controller. Created when a run starts, aborted by the cancel
-  // button, and cleared once every spawned call has settled. Holds the in-flight
-  // signal so the BottomDock's rotate button can cancel a run in progress.
   const runControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -44,7 +41,6 @@ export default function App() {
 
   const handleRun = useCallback(async () => {
     if (!anyEnabled) return;
-    // Abort any lingering run first (defensive — shouldn't normally happen).
     runControllerRef.current?.abort();
     const controller = new AbortController();
     runControllerRef.current = controller;

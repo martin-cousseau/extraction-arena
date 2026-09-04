@@ -15,20 +15,12 @@ import { type FieldEvalConfig, resolveFieldConfig } from './lib/metrics';
 
 export type ConvertStatus = 'idle' | 'converting' | 'ready' | 'error';
 
-/** Model keys that participate in the comparison (Ground Truth has no toggle). */
 export type ModelKey = 'glm' | 'gpt' | 'grok';
 
-/** Stable list of model keys for iteration (order matches DEFAULT_COLUMN_ORDER). */
 export const MODEL_KEYS: ModelKey[] = ['glm', 'gpt', 'grok'];
 
-/**
- * All comparable column keys (Ground Truth + models). The default
- * render order is fixed (see DEFAULT_COLUMN_ORDER) but the user can drag-and-drop
- * to reorder for the duration of the session.
- */
 export type ColumnKey = 'gt' | ModelKey;
 
-/** Canonical default order: Ground Truth · GLM · GPT · Grok. */
 export const DEFAULT_COLUMN_ORDER: ColumnKey[] = ['gt', 'glm', 'gpt', 'grok'];
 
 interface AppState {

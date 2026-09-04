@@ -206,7 +206,6 @@ function CollapsibleNode({ value, path, label, depth, kind }: CollapsibleNodePro
   );
 }
 
-/** Inline editor for an editable node (sub-issue #12). */
 function EditableValue({ value, path, label, depth }: NodeProps) {
   const { accent, onSave } = useTree();
   const kind = kindOf(value);

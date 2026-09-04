@@ -7,7 +7,6 @@ interface HeaderProps {
   onOpenMetrics: () => void;
 }
 
-/** Fixed top bar: gradient logo, live clock, and per-service status dots. */
 export function Header({ onOpenSettings, onOpenMetrics }: HeaderProps) {
   const [now, setNow] = useState(() => new Date());
 

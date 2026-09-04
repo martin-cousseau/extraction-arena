@@ -16,17 +16,7 @@ import { goldenProjection } from './project';
 import { validate } from './validate';
 import { applyTransition } from './lifecycle';
 
-export { normalizeEnergySource } from './energy';
-
-/**
- * Unified ingestion: paste/source JSON → canonical (v1.1) + golden projection
- * + rawSource audit copy.
- *
- * Rich domain gold (your Cybertruck dataset shape) is accepted via envelope
- * stamping — not a blind cast. Free-form Tesla golden_extraction uses the
- * adapter. Simplified v1.0 records are upgraded best-effort.
- */
-
+/** Paste/source JSON → canonical v1.1 + golden projection + rawSource audit copy. */
 export interface IngestInput {
   rawJson: unknown;
   pages: PageImage[];
