@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   RiCheckboxCircleLine,
@@ -9,6 +9,7 @@ import {
 import { OrdersChartCard, type OrdersPoint } from '@/components/application/dashboard/orders-chart-card';
 import { RevenueChartCard, type RevenuePoint } from '@/components/application/dashboard/revenue-chart-card';
 import { StatCards, type Stat } from '@/components/application/dashboard/stat-cards';
+import { DeleteRunButton } from '@/components/application/delete-run-button';
 import { Chip } from '@/components/base/badges/chip';
 import { Button } from '@/components/base/buttons/button';
 import { StatusDot } from '@/components/base/badges/status-dot';
@@ -21,11 +22,11 @@ import {
   TableRow,
 } from '@/components/base/table/table';
 import { PageHeader, Surface } from '@/app/layout';
+import { formatWeekTick, weekKey, weekStartsFromFirstToLast } from '@/lib/chart-weeks';
 import { isCompletedEvalRun, PIPELINES } from '@/lib/harness';
+import { LLAMA_EXTRACT_TIER_LABELS } from '@/pipelines/llamaparse/tiers';
 import { formatCost, formatMs } from '@/lib/utils';
 import { useAppStore } from '@/store';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -37,12 +38,38 @@ export function DashboardPage() {
     void loadRuns();
   }, [loadRuns]);
 
-  const completed = runs.filter(isCompletedEvalRun);
+  const completed = useMemo(() => runs.filter(isCompletedEvalRun), [runs]);
   const last = completed[0];
   const spend = completed.reduce((s, r) => s + (r.usage.costUsd || 0), 0);
   const avgScore = completed.length
     ? Math.round(completed.reduce((s, r) => s + (r.evaluation?.extractionScore ?? 0), 0) / completed.length)
     : 0;
+
+  const { scoreSeries, volumeSeries } = useMemo(() => {
+    const weeks = weekStartsFromFirstToLast(completed.map((r) => r.startedAt));
+    const byWeek = new Map<number, typeof completed>();
+    for (const run of completed) {
+      const key = weekKey(run.startedAt);
+      const list = byWeek.get(key);
+      if (list) list.push(run);
+      else byWeek.set(key, [run]);
+    }
+    const spanYears =
+      weeks.length > 0 && weeks[0].getFullYear() !== weeks[weeks.length - 1].getFullYear();
+    const scoreSeries: RevenuePoint[] = [];
+    const volumeSeries: OrdersPoint[] = [];
+    for (const start of weeks) {
+      const weekRuns = byWeek.get(start.getTime()) ?? [];
+      const label = formatWeekTick(start, spanYears);
+      const current =
+        weekRuns.length === 0
+          ? null
+          : weekRuns.reduce((s, r) => s + (r.evaluation?.extractionScore ?? 0), 0) / weekRuns.length;
+      scoreSeries.push({ label, current, previous: null });
+      volumeSeries.push({ label, current: weekRuns.length, previous: 0 });
+    }
+    return { scoreSeries, volumeSeries };
+  }, [completed]);
 
   const stats: Stat[] = [
     {
@@ -75,21 +102,6 @@ export function DashboardPage() {
     },
   ];
 
-  const scoreSeries: RevenuePoint[] = MONTHS.map((label, i) => {
-    const monthRuns = completed.filter((r) => new Date(r.startedAt).getMonth() === i);
-    const current =
-      monthRuns.length === 0
-        ? 0
-        : monthRuns.reduce((s, r) => s + (r.evaluation?.extractionScore ?? 0), 0) / monthRuns.length;
-    return { label, current, previous: 0 };
-  });
-
-  const volumeSeries: OrdersPoint[] = MONTHS.map((label, i) => ({
-    label,
-    current: completed.filter((r) => new Date(r.startedAt).getMonth() === i).length,
-    previous: 0,
-  }));
-
   return (
     <div>
       <PageHeader
@@ -98,7 +110,13 @@ export function DashboardPage() {
       />
       <StatCards stats={stats} />
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <RevenueChartCard title="Extraction score" data={scoreSeries} />
+        <RevenueChartCard
+          title="Extraction score"
+          data={scoreSeries}
+          formatValue={(value) => value.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          formatTick={(value) => String(Math.round(value))}
+          totals={{ current: avgScore, previous: 0 }}
+        />
         <OrdersChartCard title="Runs" data={volumeSeries} />
       </div>
       <Surface className="mt-6 p-0 overflow-hidden">
@@ -121,6 +139,9 @@ export function DashboardPage() {
               <TableColumn>Score</TableColumn>
               <TableColumn>Duration</TableColumn>
               <TableColumn>Cost</TableColumn>
+              <TableColumn>
+                <span className="sr-only">Actions</span>
+              </TableColumn>
             </TableHeader>
             <TableBody>
               {runs.slice(0, 8).map((run) => (
@@ -129,9 +150,14 @@ export function DashboardPage() {
                     {datasets.find((d) => d.id === run.datasetId)?.name ?? run.datasetId.slice(0, 8)}
                   </TableCell>
                   <TableCell>
-                    <Chip color={PIPELINES[run.pipelineId].deprecated ? 'yellow' : 'blue'}>
-                      {PIPELINES[run.pipelineId].label}
-                    </Chip>
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      <Chip color={PIPELINES[run.pipelineId].deprecated ? 'yellow' : 'blue'}>
+                        {PIPELINES[run.pipelineId].label}
+                      </Chip>
+                      {run.extractTier ? (
+                        <Chip color="soft">{LLAMA_EXTRACT_TIER_LABELS[run.extractTier]}</Chip>
+                      ) : null}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-2">
@@ -146,6 +172,12 @@ export function DashboardPage() {
                   </TableCell>
                   <TableCell className="tabular-nums">{formatMs(run.elapsedMs)}</TableCell>
                   <TableCell className="tabular-nums">{formatCost(run.usage.costUsd)}</TableCell>
+                  <TableCell>
+                    <DeleteRunButton
+                      runId={run.id}
+                      label={`Delete run ${new Date(run.startedAt).toLocaleString()}`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

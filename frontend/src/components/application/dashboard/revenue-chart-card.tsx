@@ -36,10 +36,10 @@ const MONTHS_FULL = [
 export type RevenuePoint = {
   /** Short month label on the axis. */
   label: string;
-  /** Revenue this year, in the card's currency. */
-  current: number;
+  /** Revenue this year, in the card's currency. `null` skips the point (idle week). */
+  current: number | null;
   /** Revenue for the same month a year earlier. */
-  previous: number;
+  previous: number | null;
 };
 
 /** Twelve months that add up to the stat cards' total revenue. */
@@ -58,9 +58,11 @@ export const REVENUE_DATA: RevenuePoint[] = [
   { label: "Dec", current: 14703.92, previous: 11924 },
 ];
 
-const formatK = (value: number) => (value >= 1000 ? `$${Math.round(value / 1000)}k` : `$${value}`);
 const formatMoney = (value: number) =>
   value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+const formatCurrencyValue = (value: number) => `$${formatMoney(value)}`;
+const formatCurrencyTick = (value: number) => (value >= 1000 ? `$${Math.round(value / 1000)}k` : `$${value}`);
 
 function describeDelta(current: number, previous: number) {
   if (previous === 0) return { label: "New", color: "neutral" as const };
@@ -88,29 +90,39 @@ export function RevenueChartCard({
   data = REVENUE_DATA,
   title = "Revenue",
   className,
+  formatValue = formatCurrencyValue,
+  formatTick = formatCurrencyTick,
+  totals,
 }: {
   /** Twelve points, one per month; defaults to the demo year. */
   data?: RevenuePoint[];
   /** Headline label when no month is hovered. */
   title?: string;
   className?: string;
+  /** Headline and comparison figure. Defaults to a USD amount. */
+  formatValue?: (value: number) => string;
+  /** Y-axis tick. Defaults to compact USD (`$12k`). */
+  formatTick?: (value: number) => string;
+  /** Resting headline figures. Defaults to summing the series (revenue). */
+  totals?: { current: number; previous: number };
 } = {}) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const gradientId = useId();
 
-  const totalCurrent = data.reduce((sum, point) => sum + point.current, 0);
-  const totalPrevious = data.reduce((sum, point) => sum + point.previous, 0);
+  const totalCurrent = totals?.current ?? data.reduce((sum, point) => sum + (point.current ?? 0), 0);
+  const totalPrevious = totals?.previous ?? data.reduce((sum, point) => sum + (point.previous ?? 0), 0);
   const hovering = activeIndex !== null && activeIndex < data.length;
   const point = hovering ? data[activeIndex] : null;
 
-  const headlineValue = point ? point.current : totalCurrent;
-  const comparison = point ? point.previous : totalPrevious;
+  const headlineValue = point ? (point.current ?? 0) : totalCurrent;
+  const comparison = point ? (point.previous ?? 0) : totalPrevious;
   const delta = describeDelta(headlineValue, comparison);
   const monthIndex = point ? MONTHS.indexOf(point.label) : -1;
   const label = point ? (monthIndex >= 0 ? MONTHS_FULL[monthIndex] : point.label) : title;
   const display = useCountUp(Math.round(headlineValue));
 
-  const yMax = Math.max(...data.map((d) => Math.max(d.current, d.previous)));
+  const showPrevious = data.some((d) => (d.previous ?? 0) !== 0);
+  const yMax = data.reduce((max, d) => Math.max(max, d.current ?? 0, d.previous ?? 0), 0);
 
   return (
     <section
@@ -128,34 +140,45 @@ export function RevenueChartCard({
               key={activeIndex ?? "total"}
               className="animate-number-fade text-title-1-medium whitespace-nowrap text-text-primary tabular-nums"
             >
-              ${formatMoney(display)}
+              {formatValue(display)}
             </p>
-            <Chip variant="bold" color={delta.color}>
-              {delta.label}
-            </Chip>
+            {showPrevious && (
+              <Chip variant="bold" color={delta.color}>
+                {delta.label}
+              </Chip>
+            )}
           </div>
-          <p className="text-body-2-medium text-text-tertiary tabular-nums">
-            ${formatMoney(comparison)} {point ? "a year earlier" : "last year"}
-          </p>
+          {showPrevious && (
+            <p className="text-body-2-medium text-text-tertiary tabular-nums">
+              {formatValue(comparison)} {point ? "a year earlier" : "last year"}
+            </p>
+          )}
         </div>
-        <dl className="flex shrink-0 items-center gap-4 text-body-2-medium text-text-secondary">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-chart-2-active" aria-hidden />
-            <dt>This year</dt>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-chart-neutral" aria-hidden />
-            <dt>Last year</dt>
-          </div>
-        </dl>
+        {showPrevious && (
+          <dl className="flex shrink-0 items-center gap-4 text-body-2-medium text-text-secondary">
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-chart-2-active" aria-hidden />
+              <dt>This year</dt>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-chart-neutral" aria-hidden />
+              <dt>Last year</dt>
+            </div>
+          </dl>
+        )}
       </div>
 
       {/* Chart */}
       <div className="min-h-0 w-full flex-1">
+        {data.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-body-regular text-text-secondary">No data</p>
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
-            margin={{ top: 4, right: 6, bottom: 0, left: 0 }}
+            margin={{ top: 4, right: 28, bottom: 0, left: 0 }}
             onMouseMove={(state) => {
               const index = Number(state?.activeTooltipIndex);
               if (state?.isTooltipActive && Number.isFinite(index)) setActiveIndex(index);
@@ -170,9 +193,9 @@ export function RevenueChartCard({
             </defs>
             <YAxis
               width={44}
-              domain={[0, yMax * 1.1]}
+              domain={[0, Math.max(yMax * 1.1, 1)]}
               tickCount={4}
-              tickFormatter={formatK}
+              tickFormatter={formatTick}
               tickLine={false}
               axisLine={false}
               tick={{ fontSize: 12, fill: "var(--color-text-tertiary)" }}
@@ -182,29 +205,32 @@ export function RevenueChartCard({
               tickLine={false}
               axisLine={false}
               tickMargin={12}
-              interval="preserveStartEnd"
+              interval={data.length <= 16 ? 0 : "preserveStartEnd"}
               tick={{ fontSize: 13, fill: "var(--color-text-tertiary)" }}
             />
             <Tooltip
               content={() => null}
               cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1, strokeDasharray: "4 4" }}
             />
-            <Line
-              type="monotone"
-              dataKey="previous"
-              stroke="var(--color-chart-neutral)"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              activeDot={false}
-              isAnimationActive
-              animationDuration={450}
-            />
+            {showPrevious && (
+              <Line
+                type="monotone"
+                dataKey="previous"
+                stroke="var(--color-chart-neutral)"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+                activeDot={false}
+                isAnimationActive
+                animationDuration={450}
+              />
+            )}
             <Area
               type="monotone"
               dataKey="current"
               stroke="none"
               fill={`url(#${gradientId})`}
+              connectNulls
               isAnimationActive
               animationDuration={450}
             />
@@ -215,11 +241,13 @@ export function RevenueChartCard({
               strokeWidth={2.5}
               dot={false}
               activeDot={<ActiveDot />}
+              connectNulls
               isAnimationActive
               animationDuration={450}
             />
           </ComposedChart>
         </ResponsiveContainer>
+        )}
       </div>
     </section>
   );

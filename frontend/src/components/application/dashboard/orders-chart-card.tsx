@@ -94,7 +94,8 @@ export function OrdersChartCard({
   const label = point ? (monthIndex >= 0 ? MONTHS_FULL[monthIndex] : point.label) : title;
   const display = useCountUp(headlineValue);
 
-  const yMax = Math.max(...data.map((d) => Math.max(d.current, d.previous)));
+  const showPrevious = data.some((d) => d.previous !== 0);
+  const yMax = data.reduce((max, d) => Math.max(max, d.current, d.previous), 0);
 
   return (
     <section
@@ -114,32 +115,43 @@ export function OrdersChartCard({
             >
               {display.toLocaleString("en-US")}
             </p>
-            <Chip variant="bold" color={delta.color}>
-              {delta.label}
-            </Chip>
+            {showPrevious && (
+              <Chip variant="bold" color={delta.color}>
+                {delta.label}
+              </Chip>
+            )}
           </div>
-          <p className="text-body-2-medium text-text-tertiary tabular-nums">
-            {comparison.toLocaleString("en-US")} {point ? "a year earlier" : "last year"}
-          </p>
+          {showPrevious && (
+            <p className="text-body-2-medium text-text-tertiary tabular-nums">
+              {comparison.toLocaleString("en-US")} {point ? "a year earlier" : "last year"}
+            </p>
+          )}
         </div>
-        <dl className="flex shrink-0 items-center gap-4 text-body-2-medium text-text-secondary">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-chart-9-active" aria-hidden />
-            <dt>This year</dt>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-chart-neutral" aria-hidden />
-            <dt>Last year</dt>
-          </div>
-        </dl>
+        {showPrevious && (
+          <dl className="flex shrink-0 items-center gap-4 text-body-2-medium text-text-secondary">
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-chart-9-active" aria-hidden />
+              <dt>This year</dt>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-chart-neutral" aria-hidden />
+              <dt>Last year</dt>
+            </div>
+          </dl>
+        )}
       </div>
 
       {/* Chart */}
       <div className="min-h-0 w-full flex-1">
+        {data.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-body-regular text-text-secondary">No data</p>
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
-            margin={{ top: 4, right: 6, bottom: 0, left: 0 }}
+            margin={{ top: 4, right: 28, bottom: 0, left: 0 }}
             barCategoryGap="28%"
             barGap={3}
             onMouseMove={(state) => {
@@ -150,7 +162,8 @@ export function OrdersChartCard({
           >
             <YAxis
               width={40}
-              domain={[0, yMax * 1.1]}
+              domain={[0, Math.max(Math.ceil(yMax * 1.1), 1)]}
+              allowDecimals={false}
               tickCount={4}
               tickFormatter={formatK}
               tickLine={false}
@@ -162,17 +175,19 @@ export function OrdersChartCard({
               tickLine={false}
               axisLine={false}
               tickMargin={12}
-              interval="preserveStartEnd"
+              interval={data.length <= 16 ? 0 : "preserveStartEnd"}
               tick={{ fontSize: 13, fill: "var(--color-text-tertiary)" }}
             />
             <Tooltip content={() => null} cursor={{ fill: "var(--color-chart-track)", opacity: 0.5 }} />
-            <Bar
-              dataKey="previous"
-              fill="var(--color-chart-neutral)"
-              radius={[4, 4, 0, 0]}
-              isAnimationActive
-              animationDuration={450}
-            />
+            {showPrevious && (
+              <Bar
+                dataKey="previous"
+                fill="var(--color-chart-neutral)"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive
+                animationDuration={450}
+              />
+            )}
             <Bar
               dataKey="current"
               fill="var(--color-chart-9-active)"
@@ -182,6 +197,7 @@ export function OrdersChartCard({
             />
           </BarChart>
         </ResponsiveContainer>
+        )}
       </div>
     </section>
   );
