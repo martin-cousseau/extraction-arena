@@ -1,3 +1,5 @@
+![Extraction Arena](github_banner.jpg)
+
 # Extraction Arena
 
 LLM vision-model evaluation dashboard. Create a **dataset** (upload a PDF + paste its golden rescue-sheet JSON), then run GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) side-by-side and score each field against the golden truth. The seed dataset is the 4-page Tesla Cybertruck first-responder rescue sheet. The app is built around a **canonical, versioned rescue-sheet JSON contract** (`rescue-sheet-ev-v1.1` rich domain + envelope; v1.0 still migrates); pasted/OEM/model JSON is envelope-stamped or adapted into that contract and validated before it is scored. **Datasets persist locally (IndexedDB) and survive restarts.**
