@@ -4,7 +4,7 @@
  */
 
 export const JUDGE_PROMPT_VERSION = 'judge-v1' as const;
-export const JUDGE_MODEL_ID = 'gpt-5.4-nano' as const;
+export const JUDGE_MODEL_ID = 'gpt-5.4-mini' as const;
 export const JUDGE_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 export const JUDGE_VERDICTS = [

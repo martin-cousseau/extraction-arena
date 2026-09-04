@@ -17,16 +17,8 @@ import {
 } from './types';
 
 /**
- * TeslaRescueSheetAdapter — the SINGLE registry adapter.
- *
- * Maps the current free-form Tesla/Cybertruck golden shape
- *   `{ golden_extraction: { [key]: { value, difficulty?, source? } } }`
- * (and a flat `{ manufacturer, model, ... }` object) to `rescue-sheet-ev-v1.1`.
- *
- * A curated key table routes recognized fields to canonical sections; anything
- * unrecognized is preserved verbatim under `legacy_fields` so no data is lost.
- * Rich ISO-style domain gold is NOT handled here — ingest stamps that via
- * `stampRichEnvelope`.
+ * Maps `{ golden_extraction: { key: { value, … } } }` (or a flat bag) to v1.1.
+ * Unrecognized keys go to `legacy_fields`. Rich ISO gold uses `stampRichEnvelope`.
  */
 
 const TESLA_MARKERS = ['tesla', 'cybertruck', 'model s', 'model 3', 'model x', 'model y'];

@@ -4,31 +4,38 @@ import { buildCanonicalPrompt } from './lib/canonical/prompt';
 import { ingestToCanonical } from './lib/canonical/ingest';
 import {
   deleteDataset,
+  deleteRun,
   deepMerge,
   listDatasets,
+  listRuns,
   loadDataset,
   saveDataset,
+  saveRun,
   updateDataset,
 } from './lib/db';
 import { type ModelResult, type PageImage } from './lib/api';
 import { type FieldEvalConfig, resolveFieldConfig } from './lib/metrics';
+import {
+  DEFAULT_PIPELINE_ID,
+  isRunRemoved,
+  markRunRemoved,
+  type PipelineId,
+  type RunRecord,
+} from './lib/harness';
+import {
+  DEFAULT_LLAMA_EXTRACT_TIER,
+  type LlamaExtractTier,
+} from './pipelines/llamaparse/tiers';
+import { dismissNotificationsForRun } from './lib/notifications';
 
 export type ConvertStatus = 'idle' | 'converting' | 'ready' | 'error';
 
-/** Model keys that participate in the comparison (Ground Truth has no toggle). */
 export type ModelKey = 'glm' | 'gpt' | 'grok';
 
-/** Stable list of model keys for iteration (order matches DEFAULT_COLUMN_ORDER). */
 export const MODEL_KEYS: ModelKey[] = ['glm', 'gpt', 'grok'];
 
-/**
- * All comparable column keys (Ground Truth + models). The default
- * render order is fixed (see DEFAULT_COLUMN_ORDER) but the user can drag-and-drop
- * to reorder for the duration of the session.
- */
 export type ColumnKey = 'gt' | ModelKey;
 
-/** Canonical default order: Ground Truth · GLM · GPT · Grok. */
 export const DEFAULT_COLUMN_ORDER: ColumnKey[] = ['gt', 'glm', 'gpt', 'grok'];
 
 interface AppState {
@@ -41,9 +48,13 @@ interface AppState {
   zaiKey: string;
   openaiKey: string;
   xaiKey: string;
+  /** Optional session override for DocAI; backend env is canonical. */
+  llamaKey: string;
 
-  // Per-dataset custom prompt context (keyed by dataset id). When unset for
-  // the active dataset, the prompt falls back to the dataset's PDF filename.
+  selectedPipeline: PipelineId;
+  llamaExtractTier: LlamaExtractTier;
+  runs: RunRecord[];
+  inFlightRunId: string | null;
   customContexts: Record<string, string>;
 
   /**
@@ -96,6 +107,7 @@ interface AppState {
     dpi: number;
     pages: PageImage[];
     rawJson: unknown;
+    pdfBlob?: Blob;
   }) => Promise<string>;
   removeDataset: (id: string) => Promise<void>;
   selectDataset: (id: string) => Promise<void>;
@@ -108,8 +120,13 @@ interface AppState {
   setZaiKey: (k: string) => void;
   setOpenaiKey: (k: string) => void;
   setXaiKey: (k: string) => void;
-
-  /** Set the prompt context for the active dataset (persisted in-memory only). */
+  setLlamaKey: (k: string) => void;
+  setSelectedPipeline: (id: PipelineId) => void;
+  setLlamaExtractTier: (tier: LlamaExtractTier) => void;
+  loadRuns: (datasetId?: string) => Promise<void>;
+  upsertRun: (run: RunRecord) => Promise<void>;
+  removeRun: (id: string) => Promise<void>;
+  attachPdf: (blob: Blob, pdfName?: string) => Promise<void>;
   setDocumentContext: (value: string) => void;
 
   /** Patch the evaluation config for one field of the active dataset (persisted). */
@@ -154,6 +171,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   zaiKey: import.meta.env.VITE_ZAI_API_KEY ?? '',
   openaiKey: import.meta.env.VITE_OPENAI_API_KEY ?? '',
   xaiKey: import.meta.env.VITE_XAI_API_KEY ?? '',
+  llamaKey: '',
+
+  selectedPipeline: DEFAULT_PIPELINE_ID,
+  llamaExtractTier: DEFAULT_LLAMA_EXTRACT_TIER,
+  runs: [],
+  inFlightRunId: null,
 
   customContexts: {},
 
@@ -217,6 +240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       fieldCount: Object.keys(ingested.golden.golden_extraction).length,
       createdAt: Date.now(),
       pages: input.pages,
+      pdfBlob: input.pdfBlob,
       canonical: ingested.canonical,
       golden: ingested.golden,
       rawSource: ingested.rawSource,
@@ -243,12 +267,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectDataset: async (id) => {
     const record = await loadDataset(id);
+    const runs = record ? await listRuns(record.id) : [];
     set((s) => ({
       active: record ?? null,
+      runs,
       glm: IDLE_GLM(),
       gpt: IDLE_GPT(),
       grok: IDLE_GROK(),
-      // Hydrate in-memory overrides from the persisted dataset record.
       metricConfigs: record
         ? {
             ...s.metricConfigs,
@@ -281,6 +306,45 @@ export const useAppStore = create<AppState>((set, get) => ({
   setZaiKey: (zaiKey) => set({ zaiKey }),
   setOpenaiKey: (openaiKey) => set({ openaiKey }),
   setXaiKey: (xaiKey) => set({ xaiKey }),
+  setLlamaKey: (llamaKey) => set({ llamaKey }),
+  setSelectedPipeline: (selectedPipeline) => set({ selectedPipeline }),
+  setLlamaExtractTier: (llamaExtractTier) => set({ llamaExtractTier }),
+  loadRuns: async (datasetId) => {
+    const runs = await listRuns(datasetId);
+    set({ runs });
+  },
+  upsertRun: async (run) => {
+    if (isRunRemoved(run.id)) return;
+    await saveRun(run);
+    if (isRunRemoved(run.id)) {
+      await deleteRun(run.id);
+      return;
+    }
+    set((s) => {
+      const rest = s.runs.filter((r) => r.id !== run.id);
+      return {
+        runs: [run, ...rest].sort((a, b) => b.startedAt - a.startedAt),
+        inFlightRunId: run.status === 'running' ? run.id : s.inFlightRunId === run.id ? null : s.inFlightRunId,
+      };
+    });
+  },
+  removeRun: async (id) => {
+    markRunRemoved(id);
+    await deleteRun(id);
+    dismissNotificationsForRun(id);
+    set((s) => ({
+      runs: s.runs.filter((r) => r.id !== id),
+      inFlightRunId: s.inFlightRunId === id ? null : s.inFlightRunId,
+    }));
+  },
+  attachPdf: async (blob, pdfName) => {
+    const active = get().active;
+    if (!active) throw new Error('No active dataset');
+    await get().updateActiveDataset({
+      pdfBlob: blob,
+      ...(pdfName ? { pdfName } : {}),
+    });
+  },
 
   setDocumentContext: (value) => {
     const active = get().active;

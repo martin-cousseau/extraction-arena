@@ -75,10 +75,8 @@ class NodeCanvasFactory {
     canvasObj.canvas.height = height;
   }
   destroy(_canvasObj: CanvasObject): void {
-    // Intentionally a no-op. @napi-rs/canvas rejects `canvas.width = 0` (what
-    // BaseCanvasFactory.destroy does) because its 2D context holds a shared
-    // borrow of the surface. Dropping our references is enough — pdf.js removes
-    // the entry from its cache and the canvas is GC'd.
+    // No-op: @napi-rs/canvas throws if canvas.width is set to 0 (BaseCanvasFactory.destroy)
+    // while the 2D context still holds a shared borrow. Dropping references is enough.
   }
 }
 

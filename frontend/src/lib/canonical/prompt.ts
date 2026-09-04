@@ -1,16 +1,7 @@
 import type { RescueSheetV1 } from './schema';
 import { SCHEMA_VERSION } from './schema';
 
-/**
- * Vision-model extraction prompt for the rich v1.1 contract.
- *
- * Policy (product decision): ALWAYS send the full empty nested schema —
- * never gold-gated field lists, never golden values, never field-by-field
- * multi-calls. Scoring still compares only paths present on the gold
- * projection; extra model leaves are ignored by the scorer.
- */
-
-/** Full empty nested skeleton matching rescue-sheet-ev-v1.1 domain body. */
+/** Empty nested skeleton matching rescue-sheet-ev-v1.1. Gold values are not included. */
 export const EMPTY_RICH_SKELETON = {
   vehicle: {
     manufacturer: '<string>',
@@ -23,21 +14,21 @@ export const EMPTY_RICH_SKELETON = {
     seating_capacity: '<integer>',
     propulsion: {
       primary_energy_source:
-        '<one of: battery_electric, plug_in_hybrid_electric, hybrid_electric, gasoline, diesel, hydrogen_fuel_cell, compressed_natural_gas, other — use battery_electric for pure EV / "electricity">',
+        '<optional inferred enum: battery_electric | … — only if explicitly supported; do not invent>',
       high_voltage_systems: [
         {
-          nominal_voltage_v: '<number>',
-          chemistry: '<string>',
-          component_type: '<string>',
-          source_text: '<verbatim quote or null>',
+          nominal_voltage_v: '<number optional>',
+          chemistry: '<string optional>',
+          component_type: '<string optional>',
+          source_text: '<diagram/legend label e.g. 800V Li-Ion — scored as high-voltage battery>',
         },
       ],
       low_voltage_systems: [
         {
-          nominal_voltage_v: '<number>',
-          chemistry: '<string>',
-          component_type: '<string>',
-          source_text: '<verbatim quote or null>',
+          nominal_voltage_v: '<number optional>',
+          chemistry: '<string optional>',
+          component_type: '<string optional>',
+          source_text: '<diagram/legend label e.g. 48V Li-Ion — scored as low-voltage battery>',
         },
       ],
     },
@@ -55,23 +46,44 @@ export const EMPTY_RICH_SKELETON = {
     },
     immobilization: {
       ordered_steps: [
-        { step_number: 1, action: '<snake_or_short_action_id>', source_text: '<verbatim>' },
+        {
+          step_number: 1,
+          action: '<optional snake_case id>',
+          source_text: '<verbatim step text from sheet — scored>',
+        },
       ],
     },
     stabilization_lifting: {
-      lift_areas: [{ color_code: '<string>', meaning: '<string>' }],
-      stabilization_points: [{ color_code: '<string>', meaning: '<string>' }],
+      lift_areas: [
+        {
+          color_code: '<legend color word e.g. green>',
+          meaning: '<legend label>',
+          source_text: '<color + label as on legend, e.g. green Appropriate lift areas>',
+        },
+      ],
+      stabilization_points: [
+        {
+          color_code: '<legend color word e.g. yellow>',
+          meaning: '<legend label>',
+          source_text: '<color + label as on legend>',
+        },
+      ],
       no_contact_zones: [
-        { color_code: '<string>', component_class: '<string>', source_text: '<verbatim>' },
+        {
+          color_code: '<legend color word>',
+          component_class: '<optional>',
+          meaning: '<legend label>',
+          source_text: '<color + label as on legend>',
+        },
       ],
     },
     disable_direct_hazards: {
       ordered_steps: [
         {
           step_number: 1,
-          action: '<snake_or_short_action_id>',
+          action: '<optional snake_case id>',
           condition: '<optional string>',
-          source_text: '<verbatim>',
+          source_text: '<verbatim step text from sheet — scored>',
         },
       ],
       first_responder_loop: { action: '<string>', source_text: '<verbatim>' },
@@ -149,30 +161,36 @@ export const EMPTY_RICH_SKELETON = {
       ordered_steps: [
         {
           step_number: 1,
-          action: '<string>',
+          action: '<optional snake_case id>',
+          source_text: '<verbatim step text from sheet — scored>',
           lift_height_cm: '<number optional>',
           source_equivalent_imperial: '<string optional>',
         },
       ],
+      guidance: ['<verbatim framing sentence if present>'],
       drainage_lift_requirement: {
         vehicle_end_to_raise: '<string>',
         approximate_lift_height_cm: '<number>',
         source_equivalent_imperial: '<string>',
         purpose: '<string>',
+        source_text: '<verbatim drain/lift sentence from sheet — scored when present>',
       },
-      hazard_note: '<string>',
+      hazard_note: '<verbatim hazard sentence>',
     },
     towing_transport_storage: {
-      transport_method: { required_method: '<string>', source_text: '<verbatim>' },
-      prohibited_methods: [{ action: '<string>', source_text: '<verbatim>' }],
-      pre_transport_checks: [{ parameter: '<string>', source_text: '<verbatim>' }],
+      transport_method: { required_method: '<optional id>', source_text: '<verbatim section text>' },
+      prohibited_methods: [{ action: '<optional id>', source_text: '<verbatim section text>' }],
+      pre_transport_checks: [
+        { parameter: '<optional>', source_text: '<verbatim callout text in this section>' },
+      ],
       post_incident_storage: {
-        applies_after: '<string>',
-        storage_location: '<string>',
-        minimum_separation_m: '<number>',
-        source_equivalent_imperial: '<string>',
-        separate_from: ['<string>'],
-        hazard_note: '<string>',
+        applies_after: '<optional>',
+        storage_location: '<optional>',
+        minimum_separation_m: '<optional number>',
+        source_equivalent_imperial: '<optional>',
+        separate_from: ['<optional>'],
+        hazard_note: '<optional>',
+        source_text: '<verbatim storage/reignition warning in this section if present>',
       },
     },
   },
@@ -231,11 +249,15 @@ ${skeleton}
 Rules:
 - Extract ONLY what is explicitly visible in the document (text or clear diagram labels). Do not infer or hallucinate.
 - Absent scalar leaf → "not_found" (or null when the schema example uses null). Absent array leaf → [].
-- Prefer snake_case action ids for ordered_steps.action when the sheet uses short labels; keep source_text as the verbatim printed phrase when present.
-- primary_energy_source for a pure battery EV should be "battery_electric" (not free-form "electricity").
+- ordered_steps: always fill source_text with the step as printed (or the shortest faithful quote from the sheet). action is an optional short snake_case id — source_text is the fidelity target.
+- Battery labels: put the printed diagram/legend string (e.g. "800V Li-Ion", "48V Li-Ion") in high_voltage_systems / low_voltage_systems source_text. Do not invent component locations.
+- primary_energy_source: leave null/not_found unless the sheet states energy type explicitly — do not guess "electricity".
+- Legend zones (lift / stabilization / no-contact): include the color word and the legend label in source_text (e.g. "green Appropriate lift areas"). Do not invent spatial coordinates.
+- Warnings: extract every red warning box as a separate warnings[] entry with source_text = full box text, in document reading order. Do not invent warning_id values that conflict with the text.
+- Section callouts (towing / fire / etc.): extract the printed content of each section and its embedded boxes as the matching section fields — extract text, not "green box" / "red box" as meta answers.
 - Locations are textual (location_descriptor). Never invent pixel coordinates or bounding boxes.
 - Order matters: return array entries in EXACT document order (top-to-bottom, left-to-right). Number ordered_steps 1, 2, 3… in document sequence.
 - Casing matters: preserve EXACT source capitalization in source_text fields.
-- Preserve exact wording, spelling, and punctuation in source_text.
+- Preserve exact wording, spelling, and punctuation in source_text (normalize hard line wraps inside a box to spaces).
 - Return ONLY valid JSON with no markdown fences and no commentary.`;
 }

@@ -3,11 +3,7 @@ import { SCHEMA_VERSION } from './schema';
 import { isPlainObject, makeEnvelope, type SourceContext } from './adapters/types';
 import { normalizeEnergySource } from './energy';
 
-/**
- * Built-in normalizer for vision-language-model output. NOT a registry adapter.
- * The extraction prompt asks for the full empty v1.1 domain body; this wraps
- * the model JSON in the required envelope and passes domain sections through.
- */
+/** Wrap vision-model JSON in the v1.1 envelope. Not a registry adapter. */
 
 const DOMAIN_SECTIONS = [
   'standard_reference',

@@ -4,30 +4,31 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="LLM vision-model evaluation arena for the Cybertruck first-responder rescue sheet" />
+    <meta name="description" content="Compare vision models on first-responder rescue sheets. GLM-5V-Turbo, GPT-5.4 mini, and Grok 4.5 scored against a golden dataset." />
+    <meta property="og:title" content="Extraction Arena" />
+    <meta property="og:description" content="Compare vision models on first-responder rescue sheets." />
+    <meta property="og:image" content="/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
     <title>Extraction Arena</title>
     <script>
       (() => {
         try {
-          const theme = localStorage.getItem('theme');
-          const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const resolved =
-            theme === 'light' || theme === 'dark'
-              ? theme
-              : theme === 'system' || theme === null
-                ? systemPrefersDark
-                  ? 'dark'
-                  : 'light'
-                : theme;
-
-          document.documentElement.classList.toggle('dark', resolved === 'dark');
-          document.documentElement.style.colorScheme = resolved;
+          const stored = localStorage.getItem('boardui:theme');
+          const theme = stored === 'light' || stored === 'dark' ? stored : 'dark';
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+          document.documentElement.style.colorScheme = theme;
+          if (stored !== 'light' && stored !== 'dark') {
+            localStorage.setItem('boardui:theme', 'dark');
+          }
         } catch {
           document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = 'dark';
         }
       })();
     </script>
+    <style>
+      html { --font-inter: "Inter Variable", Inter, system-ui, sans-serif; --font-mono-source: "JetBrains Mono", ui-monospace, monospace; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

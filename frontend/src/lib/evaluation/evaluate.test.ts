@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  aggregateBySection,
   defaultConfigForField,
   evaluateDataset,
   evaluateField,
@@ -193,6 +194,35 @@ describe('helpers', () => {
   it('histogram bins sum to value count', () => {
     const bins = histogramBins([0, 0.25, 0.5, 0.75, 1], 5);
     expect(bins.reduce((s, b) => s + b.count, 0)).toBe(5);
+  });
+
+  it('aggregateBySection averages precision, recall, and f1', () => {
+    const a = evaluateField('Tesla', 'Tesla', 'vehicle.manufacturer', {
+      matchStrategy: 'exact',
+      listMode: 'set',
+      priority: 'precision',
+    });
+    const b = evaluateField('wrong', 'Cybertruck', 'vehicle.model', {
+      matchStrategy: 'exact',
+      listMode: 'set',
+      priority: 'precision',
+    });
+    const c = evaluateField('ok', 'ok', 'warnings', {
+      matchStrategy: 'partial',
+      listMode: 'set',
+      priority: 'recall',
+    });
+    const sections = aggregateBySection([a, b, c]);
+    const vehicle = sections.find((s) => s.section === 'vehicle');
+    const warnings = sections.find((s) => s.section === 'warnings');
+    expect(vehicle?.count).toBe(2);
+    expect(vehicle?.meanPrecision).toBeCloseTo((a.precision + b.precision) / 2);
+    expect(vehicle?.meanRecall).toBeCloseTo((a.recall + b.recall) / 2);
+    expect(vehicle?.meanF1).toBeCloseTo((a.f1 + b.f1) / 2);
+    expect(warnings?.count).toBe(1);
+    expect(warnings?.meanPrecision).toBe(c.precision);
+    expect(warnings?.meanRecall).toBe(c.recall);
+    expect(warnings?.meanF1).toBe(c.f1);
   });
 
   it('sortByPriority puts low recall first when priority is recall', () => {

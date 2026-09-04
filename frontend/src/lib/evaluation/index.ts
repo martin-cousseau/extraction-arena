@@ -11,6 +11,9 @@ export type {
   JudgeVerdict,
   JudgeFieldResult,
   JudgeOverlay,
+  InsightSeverity,
+  JudgeInsightTheme,
+  JudgeInsights,
 } from './types';
 
 export {
@@ -92,3 +95,18 @@ export {
   type JudgeRunOptions,
   type JudgeRunOutcome,
 } from './judge';
+
+export {
+  INSIGHTS_PROMPT_VERSION,
+  INSIGHTS_MODEL_ID,
+  INSIGHTS_SYSTEM_PROMPT,
+  buildInsightsUserPrompt,
+  type InsightsCandidate,
+} from './insightsPrompt';
+
+export {
+  selectInsightsCandidates,
+  parseInsightsResponse,
+  runJudgeInsights,
+  type InsightsRunOptions,
+} from './insights';

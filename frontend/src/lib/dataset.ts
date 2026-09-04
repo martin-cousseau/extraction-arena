@@ -64,6 +64,8 @@ export interface RawSourceRecord {
  */
 export interface DatasetRecord extends DatasetMeta {
   pages: PageImage[];
+  /** Original PDF bytes. Required to run the DocAI (LlamaExtract) pipeline. */
+  pdfBlob?: Blob;
   canonical: RescueSheetV1;
   golden: GoldenDataset; // derived from `canonical` via goldenProjection()
   rawSource?: RawSourceRecord;

@@ -1,5 +1,6 @@
 import type { DatasetMeta, DatasetRecord } from './dataset';
 import { migrateLegacyDataset } from './canonical/ingest';
+import type { RunRecord } from './harness/types';
 
 /**
  * Local persistence for datasets (metadata + converted page images + canonical
@@ -9,9 +10,10 @@ import { migrateLegacyDataset } from './canonical/ingest';
  */
 
 const DB_NAME = 'extraction-arena';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const META_STORE = 'datasets-meta'; // lightweight: drives the selector list
 const FULL_STORE = 'datasets-full'; // full records incl. pages + canonical + golden
+const RUNS_STORE = 'runs';
 
 function isMigrated(rec: unknown): boolean {
   return !!rec && typeof rec === 'object' && 'canonical' in (rec as object);
@@ -37,9 +39,13 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(FULL_STORE)) {
         db.createObjectStore(FULL_STORE, { keyPath: 'id' });
       }
-      // v1 -> v2: lazily migrate records on load (see ensureMigrated). The
-      // version bump is recorded so future structural changes can run a pass
-      // here against `db.transaction`.
+      if (!db.objectStoreNames.contains(RUNS_STORE)) {
+        const runs = db.createObjectStore(RUNS_STORE, { keyPath: 'id' });
+        runs.createIndex('datasetId', 'datasetId', { unique: false });
+        runs.createIndex('startedAt', 'startedAt', { unique: false });
+      }
+      // v1 -> v2: lazily migrate records on load (see ensureMigrated).
+      // v2 -> v3: add runs store; original PDF blobs live on dataset records.
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -123,4 +129,35 @@ export async function loadDataset(id: string): Promise<DatasetRecord | undefined
 export async function deleteDataset(id: string): Promise<void> {
   await tx(META_STORE, 'readwrite', (s) => s.delete(id));
   await tx(FULL_STORE, 'readwrite', (s) => s.delete(id));
+  const runs = await listRuns(id);
+  await Promise.all(runs.map((run) => deleteRun(run.id)));
+}
+
+export async function saveRun(run: RunRecord): Promise<void> {
+  await tx(RUNS_STORE, 'readwrite', (s) => s.put(run));
+}
+
+export async function loadRun(id: string): Promise<RunRecord | undefined> {
+  return tx<RunRecord | undefined>(RUNS_STORE, 'readonly', (s) => s.get(id));
+}
+
+export async function deleteRun(id: string): Promise<void> {
+  await tx(RUNS_STORE, 'readwrite', (s) => s.delete(id));
+}
+
+export async function listRuns(datasetId?: string): Promise<RunRecord[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(RUNS_STORE, 'readonly');
+    const store = transaction.objectStore(RUNS_STORE);
+    const request = datasetId
+      ? store.index('datasetId').getAll(datasetId)
+      : store.getAll();
+    request.onsuccess = () => {
+      const rows = (request.result as RunRecord[]).sort((a, b) => b.startedAt - a.startedAt);
+      resolve(rows);
+    };
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => db.close();
+  });
 }

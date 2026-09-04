@@ -5,12 +5,8 @@
 import type { GoldenDataset, GoldenValue, ValueKind } from './dataset';
 import {
   evaluateDataset as evalDataset,
-  evaluateField,
   isAbsentValue,
   normalizeStr,
-  tokenizeScalar,
-  accuracyBand,
-  resolveFieldConfig,
   reapplyJudgeResults,
   type DatasetEvaluation,
   type FieldEvaluation,
@@ -18,7 +14,7 @@ import {
   type JudgeFieldResult,
 } from './evaluation';
 
-export { isAbsentValue, normalizeStr, tokenizeScalar, accuracyBand };
+export { isAbsentValue, normalizeStr };
 
 export interface FieldScore {
   key: string;
@@ -51,23 +47,6 @@ export interface ScoreResult {
   judgeReviewedCount?: number;
   /** Full dataset evaluation (single engine). */
   evaluation?: DatasetEvaluation;
-}
-
-export interface MatchOutcome {
-  match: boolean;
-  partial: number;
-}
-
-/** Compare a model value against the golden value for a single field. */
-export function fieldMatch(
-  model: GoldenValue,
-  golden: GoldenValue,
-  fieldKey = '',
-  config?: Partial<FieldEvalConfig>
-): MatchOutcome {
-  const resolved = resolveFieldConfig(fieldKey, config);
-  const ev = evaluateField(model, golden, fieldKey, resolved);
-  return { match: ev.match, partial: ev.partial };
 }
 
 function toScoreResult(evaluation: DatasetEvaluation, golden: GoldenDataset): ScoreResult {
@@ -118,13 +97,5 @@ export function scoreDataset(
     judgeResults && Object.keys(judgeResults).length > 0
       ? reapplyJudgeResults(det, judgeResults)
       : det;
-  return toScoreResult(evaluation, golden);
-}
-
-/** Build ScoreResult from a stored DatasetEvaluation (e.g. post-judge on ModelResult). */
-export function scoreFromEvaluation(
-  evaluation: DatasetEvaluation,
-  golden: GoldenDataset
-): ScoreResult {
   return toScoreResult(evaluation, golden);
 }

@@ -1,0 +1,16 @@
+FROM node:20-bookworm
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY lib/ lib/
+COPY routes/ routes/
+COPY server.ts ./
+
+ENV PORT=3001
+EXPOSE 3001
+
+CMD ["npm", "run", "dev"]

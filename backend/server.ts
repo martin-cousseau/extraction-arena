@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import extractRouter from './routes/extract.js';
 import llmRouter from './routes/llm.js';
+import docaiRouter from './routes/pipelines/docai.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -22,11 +23,12 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '100mb' }));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'cybertruck-doc-backend' });
+  res.json({ ok: true, service: 'extraction-arena-backend' });
 });
 
 app.use('/api', extractRouter);
 app.use('/api', llmRouter);
+app.use('/api', docaiRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const message = err instanceof Error ? err.message : 'Unexpected error.';
@@ -41,6 +43,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`[backend] Document backend listening on http://localhost:${PORT}`);
+  console.log(`[backend] listening on http://localhost:${PORT}`);
 });

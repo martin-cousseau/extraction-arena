@@ -1,9 +1,9 @@
 {
-  "name": "cybertruck-extractor-backend",
+  "name": "extraction-arena-backend",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "PDF -> PNG conversion (300 DPI) + vision-model pass-through proxy for the Cybertruck rescue-sheet evaluator",
+  "description": "PDF to PNG conversion (300 DPI) plus vision-model pass-through proxy",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch server.ts",
@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@llamaindex/llama-cloud": "^2.15.0",
     "@napi-rs/canvas": "^0.1.65",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

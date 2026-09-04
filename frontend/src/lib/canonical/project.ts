@@ -2,7 +2,6 @@ import type { GoldenDataset, GoldenExtraction, GoldenValue } from '../dataset';
 import type {
   EnergySystemEntry,
   FireMonitoringRequirement,
-  LayoutComponent,
   OrderedStep,
   RescueSheetV1,
   StoredEnergyItem,
@@ -17,6 +16,10 @@ import type {
  * Policy: procedure-level and inventory-level paths (~30–50), not every leaf.
  * Arrays preserve document order. Evaluation uses sequence mode for
  * ordered_steps and set mode for inventories/warnings by default.
+ *
+ * Exact-as-extraction policy: prefer document-supported `source_text` over
+ * internal action/class IDs whenever both exist. IDs remain in the rich
+ * canonical record for structure; they are not the default scorer target.
  */
 
 export interface ProjectedField {
@@ -35,33 +38,39 @@ function pushArray(out: Projection, path: string, v: string[] | null | undefined
   out[path] = { value: v };
 }
 
+/**
+ * Project ordered procedure steps for scoring.
+ * Prefer sheet wording (`source_text`); fall back to `action` only when text is absent.
+ */
 function stepActions(steps: OrderedStep[] | null | undefined): string[] | undefined {
   if (!steps || steps.length === 0) return undefined;
-  return steps.map((s) => s.action).filter(Boolean);
+  const items = steps
+    .map((s) => {
+      const text = typeof s.source_text === 'string' ? s.source_text.trim() : '';
+      if (text) return text;
+      const action = typeof s.action === 'string' ? s.action.trim() : '';
+      return action || null;
+    })
+    .filter((x): x is string => Boolean(x));
+  return items.length ? items : undefined;
 }
 
+/**
+ * Battery / energy-system labels for Exact scoring.
+ * Prefer sheet label (`source_text`, e.g. "800V Li-Ion"); fall back to a light composite only if text is absent.
+ */
 function energySystemSummaries(systems: EnergySystemEntry[] | null | undefined): string[] | undefined {
   if (!systems || systems.length === 0) return undefined;
   return systems.map((s) => {
+    const text = typeof s.source_text === 'string' ? s.source_text.trim() : '';
+    if (text) return text;
     const parts: string[] = [];
     if (s.nominal_voltage_v != null) parts.push(`${s.nominal_voltage_v}V`);
     if (s.chemistry) parts.push(s.chemistry);
     if (s.component_type) parts.push(s.component_type);
     if (s.component_class) parts.push(s.component_class);
     if (s.energy_type) parts.push(s.energy_type);
-    if (parts.length === 0 && s.source_text) return s.source_text;
-    return parts.join(' ') || s.source_text || 'unknown';
-  });
-}
-
-function componentStrings(comps: LayoutComponent[] | null | undefined): string[] | undefined {
-  if (!comps || comps.length === 0) return undefined;
-  return comps.map((c) => {
-    const loc =
-      c.location_descriptor ??
-      c.location?.value ??
-      null;
-    return loc ? `${c.component_class} @ ${loc}` : c.component_class;
+    return parts.join(' ') || 'unknown';
   });
 }
 
@@ -133,13 +142,19 @@ function accessMethodSummaries(
   });
 }
 
+/**
+ * Stabilization / lift legend rows.
+ * Prefer source_text; else "color meaning" (space, not colon) so Exact can include color tokens.
+ */
 function zoneSummaries(
   zones: Array<{ color_code?: string | null; meaning?: string | null; source_text?: string | null; component_class?: string | null }> | null | undefined
 ): string[] | undefined {
   if (!zones || zones.length === 0) return undefined;
   return zones.map((z) => {
-    if (z.source_text) return z.source_text;
-    if (z.meaning) return z.color_code ? `${z.color_code}: ${z.meaning}` : z.meaning;
+    const text = typeof z.source_text === 'string' ? z.source_text.trim() : '';
+    if (text) return text;
+    if (z.color_code && z.meaning) return `${z.color_code} ${z.meaning}`.trim();
+    if (z.meaning) return z.meaning;
     return z.component_class || z.color_code || 'zone';
   });
 }
@@ -150,7 +165,7 @@ export function project(record: RescueSheetV1): Projection {
   const p = v?.propulsion;
   const ri = record.responder_information ?? {};
 
-  // Vehicle identity
+  // Vehicle identity (scored only when present; primary_energy_source is inferred → not Exact)
   pushScalar(out, 'vehicle.manufacturer', v?.manufacturer);
   pushScalar(out, 'vehicle.model', v?.model);
   pushScalar(out, 'vehicle.model_year', v?.model_year);
@@ -158,10 +173,11 @@ export function project(record: RescueSheetV1): Projection {
   pushScalar(out, 'vehicle.body_style', v?.body_style);
   pushScalar(out, 'vehicle.door_count', v?.door_count ?? p?.door_count);
   pushScalar(out, 'vehicle.seating_capacity', v?.seating_capacity);
-  pushScalar(out, 'vehicle.propulsion.primary_energy_source', p?.primary_energy_source);
+  // primary_energy_source intentionally not projected: not printed on Cybertruck sheet.
   pushScalar(out, 'vehicle.propulsion.drivetrain', p?.drivetrain ?? undefined);
-  pushArray(out, 'vehicle.propulsion.high_voltage_systems', energySystemSummaries(p?.high_voltage_systems));
-  pushArray(out, 'vehicle.propulsion.low_voltage_systems', energySystemSummaries(p?.low_voltage_systems));
+  // Sheet labels (e.g. "800V Li-Ion") — path renamed from *_systems for Exact clarity.
+  pushArray(out, 'vehicle.propulsion.high_voltage_battery', energySystemSummaries(p?.high_voltage_systems));
+  pushArray(out, 'vehicle.propulsion.low_voltage_battery', energySystemSummaries(p?.low_voltage_systems));
 
   // Immobilization
   pushArray(
@@ -239,11 +255,7 @@ export function project(record: RescueSheetV1): Projection {
       'responder_information.stored_energy_fluids_gases_solids.fluids',
       storedItemSummaries(stored.fluids)
     );
-    pushArray(
-      out,
-      'responder_information.stored_energy_fluids_gases_solids.pyrotechnic_devices',
-      storedItemSummaries(stored.pyrotechnic_devices)
-    );
+    // pyrotechnic_devices: diagram-only deduction for Cybertruck v1 → not Exact-projected.
     pushArray(
       out,
       'responder_information.stored_energy_fluids_gases_solids.prohibited_actions',
@@ -292,17 +304,30 @@ export function project(record: RescueSheetV1): Projection {
     pushArray(out, 'responder_information.submersion.guidance', sub.guidance ?? undefined);
     if (sub.hazard_note) pushScalar(out, 'responder_information.submersion.hazard_note', sub.hazard_note);
     const drain = sub.drainage_lift_requirement as
-      | { purpose?: string; approximate_lift_height_cm?: number; vehicle_end_to_raise?: string }
+      | {
+          purpose?: string;
+          approximate_lift_height_cm?: number;
+          vehicle_end_to_raise?: string;
+          source_text?: string;
+        }
       | null
       | undefined;
     if (drain) {
-      const parts = [
-        drain.vehicle_end_to_raise,
-        drain.approximate_lift_height_cm != null ? `${drain.approximate_lift_height_cm}cm` : null,
-        drain.purpose,
-      ].filter(Boolean);
-      if (parts.length) {
-        pushScalar(out, 'responder_information.submersion.drainage_lift_requirement', parts.join(' '));
+      const drainText =
+        typeof drain.source_text === 'string' && drain.source_text.trim()
+          ? drain.source_text.trim()
+          : null;
+      if (drainText) {
+        pushScalar(out, 'responder_information.submersion.drainage_lift_requirement', drainText);
+      } else {
+        const parts = [
+          drain.vehicle_end_to_raise,
+          drain.approximate_lift_height_cm != null ? `${drain.approximate_lift_height_cm}cm` : null,
+          drain.purpose,
+        ].filter(Boolean);
+        if (parts.length) {
+          pushScalar(out, 'responder_information.submersion.drainage_lift_requirement', parts.join(' '));
+        }
       }
     }
   }
@@ -324,24 +349,24 @@ export function project(record: RescueSheetV1): Projection {
       'responder_information.towing_transport_storage.prohibited_methods',
       actionOrTextList(tow.prohibited_methods)
     );
-    const storage = tow.post_incident_storage as
-      | { storage_location?: string; minimum_separation_m?: number; hazard_note?: string; source_equivalent_imperial?: string }
+    // Pre-transport checks (sheet green info box — not a red warning box).
+    const preChecks = tow.pre_transport_checks as
+      | Array<{ parameter?: string; source_text?: string }>
       | null
       | undefined;
-    if (storage) {
-      const parts = [
-        storage.storage_location,
-        storage.minimum_separation_m != null ? `${storage.minimum_separation_m}m` : null,
-        storage.hazard_note,
-      ].filter(Boolean);
-      if (parts.length) {
-        pushScalar(
-          out,
-          'responder_information.towing_transport_storage.post_incident_storage',
-          parts.join(' ')
-        );
+    if (preChecks?.length) {
+      const texts = preChecks
+        .map((c) => {
+          const t = typeof c.source_text === 'string' ? c.source_text.trim() : '';
+          return t || (c.parameter ? String(c.parameter) : '');
+        })
+        .filter(Boolean);
+      if (texts.length) {
+        pushArray(out, 'responder_information.towing_transport_storage.pre_transport_checks', texts);
       }
     }
+    // post_incident_storage: keep in rich gold only for v1. The red-box wording is
+    // scored under `warnings` (no double Exact). Section-scoped GT can reintroduce it later.
   }
 
   // Silent vehicle / identification
@@ -354,10 +379,10 @@ export function project(record: RescueSheetV1): Projection {
     );
   }
 
-  // Vehicle layout
+  // Vehicle layout — structural zones + glazing keep sheet text.
+  // components (legend + diagram locations): not Exact-projected for Cybertruck v1.
   const layout = record.vehicle_layout;
   if (layout) {
-    pushArray(out, 'vehicle_layout.components', componentStrings(layout.components));
     pushArray(
       out,
       'vehicle_layout.structural_zones',
@@ -376,11 +401,11 @@ export function project(record: RescueSheetV1): Projection {
     );
   }
 
-  // Warnings
+  // Warnings (document-order red boxes when gold is inventory-complete)
   pushArray(out, 'warnings', warningSummaries(record.warnings));
 
-  // v1.0 top-level HV / pyrotechnic fallbacks (if rich paths empty)
-  if (!out['vehicle.propulsion.high_voltage_systems'] && record.high_voltage_systems) {
+  // v1.0 top-level HV fallbacks (path aligned with battery rename)
+  if (!out['vehicle.propulsion.high_voltage_battery'] && record.high_voltage_systems) {
     const hv = record.high_voltage_systems;
     pushScalar(out, 'high_voltage_systems.nominal_voltage_v', hv.nominal_voltage_v);
     pushArray(out, 'high_voltage_systems.disconnect', hv.disconnect ?? undefined);
@@ -388,19 +413,6 @@ export function project(record: RescueSheetV1): Projection {
       out,
       'high_voltage_systems.cables',
       hv.cables?.map((c) => c.description)
-    );
-  }
-  if (!out['vehicle_layout.components'] && record.pyrotechnic_devices?.devices?.length) {
-    pushArray(
-      out,
-      'pyrotechnic_devices.devices',
-      componentStrings(
-        record.pyrotechnic_devices.devices.map((d) => ({
-          component_class: d.component_class,
-          location: d.location,
-          evidence_ids: d.evidence_ids,
-        }))
-      )
     );
   }
 
