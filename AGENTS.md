@@ -1,19 +1,22 @@
 # AGENTS.md
 
-Extraction Arena compares GLM-5V-Turbo (Z.AI), GPT-5.4 mini (OpenAI), and Grok 4.5 (xAI) against a per-document golden dataset. Seed document: Tesla Cybertruck first-responder rescue sheet. Scoring, UI, persistence, and the extraction prompt all use the canonical `rescue-sheet-ev-v1.1` record (rich ISO-17840-style domain + app envelope; v1.0 still migrates). Arbitrary JSON enters only through envelope-stamping, the Tesla adapter, or VLM normalize.
+Extraction Arena is an eval harness for document extraction pipelines scored against a per-document golden dataset. Seed document: Tesla Cybertruck first-responder rescue sheet. Scoring, UI, persistence, and schemas use the canonical `rescue-sheet-ev-v1.1` record (rich ISO-17840-style domain + app envelope; v1.0 still migrates). Arbitrary JSON enters only through envelope-stamping, the Tesla adapter, or VLM/extract normalize.
+
+The native pipeline is **DocAI** (LlamaExtract). GLM-5V-Turbo, GPT-5.4 mini, and Grok 4.5 remain as **deprecated** vision adapters.
 
 ## Layout
 
 Two independent Node projects (not a workspace). The root `package.json` only has convenience scripts (`npm run dev` starts both).
 
-- `backend/` — Express + TypeScript. `POST /api/extract` (PDF→PNG at 300 DPI) and `POST /api/llm` (pass-through vision proxy).
-- `frontend/` — Vite + React 18 + TypeScript. Datasets in IndexedDB; scoring in `lib/evaluation/`.
+- `backend/` — Express + TypeScript. `POST /api/extract` (PDF→PNG at 300 DPI), `POST /api/llm` (vision proxy), `POST /api/pipelines/docai` (LlamaExtract).
+- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4 + BoardUI. Datasets and runs in IndexedDB; scoring in `lib/evaluation/`.
 
 ## Backend
 
-The LLM route exists because Z.AI, OpenAI, and xAI omit `Access-Control-Allow-Origin`. The frontend builds the OpenAI-compatible request and POSTs `{ endpoint, apiKey, payload }`; the backend forwards it and returns the upstream body. Do not call providers from the browser. Do not put scoring in the backend.
+Do not call providers from the browser. Do not put scoring in the backend.
 
-Keys stay client-side (`VITE_*`, editable in Settings) and are forwarded through the proxy. The backend never stores them.
+- **DocAI:** `LLAMA_CLOUD_API_KEY` lives on the backend. Optional session override is sent as `x-llama-api-key` and is never stored.
+- **Deprecated vision:** `VITE_*` keys stay client-side and are forwarded through `/api/llm` because those providers omit CORS.
 
 ## Canonical contract
 
@@ -34,7 +37,7 @@ Per dataset (`lib/canonical/ingest.ts`):
 
 Validation (`canonical/validate.ts`) never throws; problems are `Issue[]`. Evidence is page-level (`location_descriptor`), not bounding boxes. Lifecycle is metadata + rules (`canonical/lifecycle.ts`); there is no review-queue UI.
 
-A dataset is created via **Create Dataset** (name → PDF → golden JSON) and stored in IndexedDB (`lib/db.ts`, DB v2). The extraction prompt (`buildCanonicalPrompt`) sends the full empty v1.1 skeleton — never golden answers. Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
+A dataset is created via **Create Dataset** (name → PDF → golden JSON) and stored in IndexedDB (`lib/db.ts`, DB v3: original `pdfBlob` + `runs`). The extraction prompt (`buildCanonicalPrompt`) still sends the empty v1.1 skeleton for vision adapters — never golden answers. DocAI receives a domain-only JSON Schema (`llamaExtractDataSchema`). Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
 
 Details: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/README.md).
 
@@ -46,31 +49,41 @@ Details: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/REA
 - PDF→PNG at exactly **300 DPI**.
 - One evaluation engine (`lib/evaluation/`) on the flat projection. Exact, partial, and P/R/F1 share alignments. Array geometry is path-aware (`ordered_steps` → sequence; `warnings`/inventories → set). Never mock scores.
 - Exact prefers sheet-supported `source_text` over internal action/class IDs when both exist.
-- All three models are live calls with real keys.
-- Normalize + validate every model JSON (`normalizeVlmToDraft` → `validate` → `project`). Issues are surfaced, never thrown.
+- Pipeline JSON is always `normalizeVlmToDraft` → `validate` → `project` → `evaluateDataset`. Issues are surfaced, never thrown.
+- DocAI is the default pipeline. Vision adapters are deprecated, not deleted.
+- Llama cost uses official credits × `$1.25 / 1,000`. Never treat a null `usage.credits` as $0; poll until billing lands.
 
 ## Sentinels
 
 Absent scalar → `"not_found"`. Absent array → `[]`. Absent object → `{}`. Scoring treats all three as absent; two absents match.
 
-## Vision calls
+## Pipelines
 
-`temperature: 0`, `response_format: { type: "json_object" }`, multimodal content: extraction prompt + one `image_url` per page. Always via `/api/llm`.
-
-| Model | Endpoint | Model ID |
+| Id | Kind | Status |
 |---|---|---|
-| GLM-5V-Turbo | `https://api.z.ai/api/paas/v4/chat/completions` | `glm-5v-turbo` |
-| GPT-5.4 mini | `https://api.openai.com/v1/chat/completions` | `gpt-5.4-mini` |
-| Grok 4.5 | `https://api.x.ai/v1/chat/completions` | `grok-4.5` |
+| `docai` | Native LlamaExtract (`tier: agentic`, `parse_tier: agentic`) | Default |
+| `glm` / `gpt` / `grok` | Vision via `/api/llm` | Deprecated |
 
-Bearer auth. No separate SDKs.
-
-`VITE_` keys are exposed to the browser on purpose for this demo. If calls ever move server-side, drop the prefix.
+Vision calls: `temperature: 0`, `response_format: { type: "json_object" }`, prompt + one `image_url` per page.
 
 ## UI
 
-Dark is the default. Settings includes a light/dark toggle. Backgrounds `#0A0A0F` / `#12121A` in dark.
+BoardUI on Vite (not shadcn, not Next.js). React Aria primitives, Remix Icon, `cx()` from `@/utils/cx`, semantic tokens only. Dark is the product default (`boardui:theme`); ThemeToggle is manual and ignores OS preference.
 
-Column accents, left to right: Ground Truth `#10B981` · GLM-5V-Turbo `#06B6D4` · GPT-5.4 mini `#8B5CF6` · Grok 4.5 `#F43F5E`.
+Pages: `/` dashboard, `/datasets`, `/datasets/new`, `/datasets/:id`, `/datasets/:id/ground-truth`, `/datasets/:id/config`, `/runs`, `/runs/:id`, `/settings`.
 
-Minimum font size 14px. Animations finish in ~3–5s; no particle systems, 3D, video, sound, or cursor trails.
+Prefer installed BoardUI components over lookalikes. Minimum type size is BoardUI `text-body-*` (14px). No particle systems, 3D, video, sound, or cursor trails.
+
+<!-- boardui:rules:start -->
+# BoardUI design rules
+
+This project uses BoardUI (React + Tailwind CSS v4, source-owned components under `frontend/src/components/`). These rules always apply when writing UI code.
+
+- Before hand-building any UI element, check `components/base/` and `components/application/`, and prefer it.
+- Missing a component? `npx boardui@latest add <name>` instead of writing a lookalike.
+- Import through the `@/` alias, e.g. `import { Button } from "@/components/base/buttons/button"`.
+- Semantic tokens only. Never `text-gray-500`, `bg-white`, or leftover arena hex accents.
+- Composite type utilities only (`text-body-medium`, `text-title-2-semibold`). Do not stack `text-sm font-medium`.
+- Merge classes with `cx()` from `@/utils/cx`. Icons from `@remixicon/react` as component refs.
+- Dark mode is the `.dark` class on `<html>`. Do not write `dark:` overrides with raw colors.
+<!-- boardui:rules:end -->
