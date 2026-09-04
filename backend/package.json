@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@llamaindex/llama-cloud": "^2.15.0",
     "@napi-rs/canvas": "^0.1.65",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

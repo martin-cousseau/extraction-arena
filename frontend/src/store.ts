@@ -6,12 +6,19 @@ import {
   deleteDataset,
   deepMerge,
   listDatasets,
+  listRuns,
   loadDataset,
   saveDataset,
+  saveRun,
   updateDataset,
 } from './lib/db';
 import { type ModelResult, type PageImage } from './lib/api';
 import { type FieldEvalConfig, resolveFieldConfig } from './lib/metrics';
+import {
+  DEFAULT_PIPELINE_ID,
+  type PipelineId,
+  type RunRecord,
+} from './lib/harness';
 
 export type ConvertStatus = 'idle' | 'converting' | 'ready' | 'error';
 
@@ -33,9 +40,12 @@ interface AppState {
   zaiKey: string;
   openaiKey: string;
   xaiKey: string;
+  /** Optional session override for DocAI; backend env is canonical. */
+  llamaKey: string;
 
-  // Per-dataset custom prompt context (keyed by dataset id). When unset for
-  // the active dataset, the prompt falls back to the dataset's PDF filename.
+  selectedPipeline: PipelineId;
+  runs: RunRecord[];
+  inFlightRunId: string | null;
   customContexts: Record<string, string>;
 
   /**
@@ -88,6 +98,7 @@ interface AppState {
     dpi: number;
     pages: PageImage[];
     rawJson: unknown;
+    pdfBlob?: Blob;
   }) => Promise<string>;
   removeDataset: (id: string) => Promise<void>;
   selectDataset: (id: string) => Promise<void>;
@@ -100,8 +111,11 @@ interface AppState {
   setZaiKey: (k: string) => void;
   setOpenaiKey: (k: string) => void;
   setXaiKey: (k: string) => void;
-
-  /** Set the prompt context for the active dataset (persisted in-memory only). */
+  setLlamaKey: (k: string) => void;
+  setSelectedPipeline: (id: PipelineId) => void;
+  loadRuns: (datasetId?: string) => Promise<void>;
+  upsertRun: (run: RunRecord) => Promise<void>;
+  attachPdf: (blob: Blob, pdfName?: string) => Promise<void>;
   setDocumentContext: (value: string) => void;
 
   /** Patch the evaluation config for one field of the active dataset (persisted). */
@@ -146,6 +160,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   zaiKey: import.meta.env.VITE_ZAI_API_KEY ?? '',
   openaiKey: import.meta.env.VITE_OPENAI_API_KEY ?? '',
   xaiKey: import.meta.env.VITE_XAI_API_KEY ?? '',
+  llamaKey: '',
+
+  selectedPipeline: DEFAULT_PIPELINE_ID,
+  runs: [],
+  inFlightRunId: null,
 
   customContexts: {},
 
@@ -209,6 +228,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       fieldCount: Object.keys(ingested.golden.golden_extraction).length,
       createdAt: Date.now(),
       pages: input.pages,
+      pdfBlob: input.pdfBlob,
       canonical: ingested.canonical,
       golden: ingested.golden,
       rawSource: ingested.rawSource,
@@ -235,12 +255,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectDataset: async (id) => {
     const record = await loadDataset(id);
+    const runs = record ? await listRuns(record.id) : [];
     set((s) => ({
       active: record ?? null,
+      runs,
       glm: IDLE_GLM(),
       gpt: IDLE_GPT(),
       grok: IDLE_GROK(),
-      // Hydrate in-memory overrides from the persisted dataset record.
       metricConfigs: record
         ? {
             ...s.metricConfigs,
@@ -273,6 +294,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   setZaiKey: (zaiKey) => set({ zaiKey }),
   setOpenaiKey: (openaiKey) => set({ openaiKey }),
   setXaiKey: (xaiKey) => set({ xaiKey }),
+  setLlamaKey: (llamaKey) => set({ llamaKey }),
+  setSelectedPipeline: (selectedPipeline) => set({ selectedPipeline }),
+  loadRuns: async (datasetId) => {
+    const runs = await listRuns(datasetId);
+    set({ runs });
+  },
+  upsertRun: async (run) => {
+    await saveRun(run);
+    set((s) => {
+      const rest = s.runs.filter((r) => r.id !== run.id);
+      return {
+        runs: [run, ...rest].sort((a, b) => b.startedAt - a.startedAt),
+        inFlightRunId: run.status === 'running' ? run.id : s.inFlightRunId === run.id ? null : s.inFlightRunId,
+      };
+    });
+  },
+  attachPdf: async (blob, pdfName) => {
+    const active = get().active;
+    if (!active) throw new Error('No active dataset');
+    await get().updateActiveDataset({
+      pdfBlob: blob,
+      ...(pdfName ? { pdfName } : {}),
+    });
+  },
 
   setDocumentContext: (value) => {
     const active = get().active;
