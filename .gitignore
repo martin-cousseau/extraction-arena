@@ -32,3 +32,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local gold-audit scratch (personal paths; do not publish)
+scripts/gold-audit-phase1.ts
+docs/gold-audit-phase1.md
+docs/gold-audit-phase1.json
+docs/gold-problems-fillin.md
+docs/submersion-source-text-candidates.json
