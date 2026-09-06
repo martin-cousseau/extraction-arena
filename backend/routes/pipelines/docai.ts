@@ -3,6 +3,8 @@ import multer from 'multer';
 import { createRequestLogger, formatBytes } from '../../lib/log.js';
 import {
   creditsToUsd,
+  deleteLlamaExtractJobs,
+  normalizeExtractJobIds,
   resolveLlamaExtractTier,
   runLlamaExtract,
   type LlamaExtractConfig,
@@ -30,6 +32,10 @@ function resolveApiKey(req: Request): string | null {
   return env || null;
 }
 
+function missingLlamaKeyMessage(): string {
+  return 'Llama Cloud API key is not configured. Set LLAMA_CLOUD_API_KEY on the backend or paste a session key in Settings.';
+}
+
 router.get('/pipelines/docai', (_req, res) => {
   res.json({
     pipeline: 'docai',
@@ -38,14 +44,54 @@ router.get('/pipelines/docai', (_req, res) => {
   });
 });
 
+async function deleteExtractJobs(req: Request, res: Response, rawJobIds: unknown) {
+  const log = createRequestLogger('docai');
+  const apiKey = resolveApiKey(req);
+  if (!apiKey) {
+    log.warn('rejecting LlamaExtract job delete with no Llama Cloud key');
+    return res.status(503).json({ error: missingLlamaKeyMessage() });
+  }
+
+  const jobIds = normalizeExtractJobIds(rawJobIds);
+  if (jobIds.length === 0) {
+    return res.status(400).json({ error: 'jobIds must be a non-empty array of job id strings.' });
+  }
+
+  try {
+    const results = await deleteLlamaExtractJobs({
+      apiKey,
+      jobIds,
+      projectId: process.env.LLAMA_CLOUD_PROJECT_ID?.trim() || undefined,
+    });
+    const deleted = results.filter((row) => row.deleted).length;
+    log.log('deleted LlamaExtract jobs', {
+      requested: jobIds.length,
+      deleted,
+      failed: jobIds.length - deleted,
+    });
+    return res.json({ results });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.error('LlamaExtract job delete failed', { message });
+    return res.status(502).json({ error: `LlamaExtract job delete failed: ${message}` });
+  }
+}
+
+router.post('/pipelines/docai/jobs/delete', async (req: Request, res: Response) => {
+  const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  return deleteExtractJobs(req, res, body.jobIds ?? body.job_ids);
+});
+
+router.delete('/pipelines/docai/jobs/:jobId', async (req: Request, res: Response) => {
+  return deleteExtractJobs(req, res, [req.params.jobId]);
+});
+
 router.post('/pipelines/docai', upload.single('pdf'), async (req: Request, res: Response) => {
   const log = createRequestLogger('docai');
   const apiKey = resolveApiKey(req);
   if (!apiKey) {
     log.warn('rejecting DocAI run with no Llama Cloud key');
-    return res.status(503).json({
-      error: 'Llama Cloud API key is not configured. Set LLAMA_CLOUD_API_KEY on the backend or paste a session key in Settings.',
-    });
+    return res.status(503).json({ error: missingLlamaKeyMessage() });
   }
   if (!req.file) {
     return res.status(400).json({ error: 'No PDF file uploaded (field name must be "pdf").' });

@@ -1,5 +1,5 @@
 import type { PipelineDefinition } from '../types';
-import { runLlamaparseExtract } from './adapter';
+import { deleteLlamaparseJobs, runLlamaparseExtract } from './adapter';
 import { LlamaParseLogo } from './logo';
 import { llamaExtractDataSchema } from './schema';
 
@@ -14,6 +14,7 @@ export const llamaparsePipeline: PipelineDefinition = {
   Logo: LlamaParseLogo,
   dataSchema: llamaExtractDataSchema,
   extract: (input, options) => runLlamaparseExtract(input, options, llamaExtractDataSchema()),
+  deleteJobs: (jobIds, options) => deleteLlamaparseJobs(jobIds, options),
 };
 
 export { llamaExtractDataSchema, isEnvelopeKey, llamaExtractIncompatibilities } from './schema';

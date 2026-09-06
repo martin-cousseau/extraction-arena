@@ -1,10 +1,12 @@
 export type {
   LlamaExtractTier,
   PipelineDefinition,
+  PipelineDeleteJobsOptions,
   PipelineExtractOptions,
   PipelineExtractOutcome,
   PipelineId,
 } from './types';
+export { collectRemoteJobIds, purgePipelineJobsForRuns } from './purge-jobs';
 export {
   DEFAULT_PIPELINE_ID,
   getPipeline,

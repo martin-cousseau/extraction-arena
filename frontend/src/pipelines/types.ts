@@ -17,6 +17,10 @@ export interface PipelineExtractOptions {
   };
 }
 
+export interface PipelineDeleteJobsOptions {
+  llamaKey?: string;
+}
+
 export interface PipelineExtractOutcome {
   extractResult: unknown;
   extractMetadata?: unknown;
@@ -47,4 +51,6 @@ export interface PipelineDefinition {
     input: PipelineRunInput,
     options: PipelineExtractOptions
   ) => Promise<PipelineExtractOutcome>;
+  /** Drop provider-side extract jobs when a run or dataset is deleted. */
+  deleteJobs?: (jobIds: string[], options: PipelineDeleteJobsOptions) => Promise<void>;
 }
