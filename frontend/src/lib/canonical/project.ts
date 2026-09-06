@@ -1,13 +1,6 @@
 import type { GoldenDataset, GoldenExtraction, GoldenValue } from '../dataset';
-import type {
-  EnergySystemEntry,
-  FireMonitoringRequirement,
-  OrderedStep,
-  RescueSheetV1,
-  StoredEnergyItem,
-  WarningEntry,
-  Evidence,
-} from './schema';
+import type { RescueSheetV1, Evidence } from './schema';
+import { isPlainObject } from './adapters/types';
 
 /**
  * Project a rich v1.1 canonical record into the flat `path -> GoldenValue` map
@@ -38,19 +31,63 @@ function pushArray(out: Projection, path: string, v: string[] | null | undefined
   out[path] = { value: v };
 }
 
+/** LlamaExtract / VLM payloads sometimes wrap a scalar as `{ value, citation? }`. */
+function asTrimmedString(v: unknown): string | null {
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t ? t : null;
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  if (
+    isPlainObject(v) &&
+    'value' in v &&
+    !('source_text' in v) &&
+    !('action' in v) &&
+    !('step_number' in v)
+  ) {
+    return asTrimmedString(v.value);
+  }
+  return null;
+}
+
+function asList(v: unknown): unknown[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string') return v.trim() ? [v] : [];
+  if (isPlainObject(v)) return [v];
+  return [];
+}
+
+function pickText(item: unknown, keys: string[]): string | null {
+  const direct = asTrimmedString(item);
+  if (direct) return direct;
+  if (!isPlainObject(item)) return null;
+  for (const key of keys) {
+    const t = asTrimmedString(item[key]);
+    if (t) return t;
+  }
+  return null;
+}
+
+function stringList(v: unknown): string[] | undefined {
+  const items = asList(v)
+    .map((item) => pickText(item, ['source_text', 'text', 'description']))
+    .filter((x): x is string => Boolean(x));
+  return items.length ? items : undefined;
+}
+
 /**
  * Project ordered procedure steps for scoring.
  * Prefer sheet wording (`source_text`); fall back to `action` only when text is absent.
+ * Also accepts string items and `{ text | description | value }` shapes from extractors.
  */
-function stepActions(steps: OrderedStep[] | null | undefined): string[] | undefined {
-  if (!steps || steps.length === 0) return undefined;
-  const items = steps
-    .map((s) => {
-      const text = typeof s.source_text === 'string' ? s.source_text.trim() : '';
-      if (text) return text;
-      const action = typeof s.action === 'string' ? s.action.trim() : '';
-      return action || null;
-    })
+function stepActions(steps: unknown): string[] | undefined {
+  const list = asList(steps);
+  if (list.length === 0) return undefined;
+  const items = list
+    .map((s) =>
+      pickText(s, ['source_text', 'text', 'description', 'content', 'instruction', 'step', 'action'])
+    )
     .filter((x): x is string => Boolean(x));
   return items.length ? items : undefined;
 }
@@ -59,85 +96,86 @@ function stepActions(steps: OrderedStep[] | null | undefined): string[] | undefi
  * Battery / energy-system labels for Exact scoring.
  * Prefer sheet label (`source_text`, e.g. "800V Li-Ion"); fall back to a light composite only if text is absent.
  */
-function energySystemSummaries(systems: EnergySystemEntry[] | null | undefined): string[] | undefined {
-  if (!systems || systems.length === 0) return undefined;
-  return systems.map((s) => {
-    const text = typeof s.source_text === 'string' ? s.source_text.trim() : '';
+function energySystemSummaries(systems: unknown): string[] | undefined {
+  const list = asList(systems);
+  if (list.length === 0) return undefined;
+  return list.map((s) => {
+    const text = pickText(s, ['source_text', 'text', 'label']);
     if (text) return text;
+    if (!isPlainObject(s)) return 'unknown';
     const parts: string[] = [];
     if (s.nominal_voltage_v != null) parts.push(`${s.nominal_voltage_v}V`);
-    if (s.chemistry) parts.push(s.chemistry);
-    if (s.component_type) parts.push(s.component_type);
-    if (s.component_class) parts.push(s.component_class);
-    if (s.energy_type) parts.push(s.energy_type);
+    if (s.chemistry) parts.push(String(s.chemistry));
+    if (s.component_type) parts.push(String(s.component_type));
+    if (s.component_class) parts.push(String(s.component_class));
+    if (s.energy_type) parts.push(String(s.energy_type));
     return parts.join(' ') || 'unknown';
   });
 }
 
-function storedItemSummaries(items: StoredEnergyItem[] | null | undefined): string[] | undefined {
-  if (!items || items.length === 0) return undefined;
-  return items.map((it) => {
-    if (it.source_text) return it.source_text;
+function storedItemSummaries(items: unknown): string[] | undefined {
+  const list = asList(items);
+  if (list.length === 0) return undefined;
+  return list.map((it) => {
+    const text = pickText(it, ['source_text', 'text', 'label', 'description']);
+    if (text) return text;
+    if (!isPlainObject(it)) return 'item';
     const parts: string[] = [];
-    if (it.component_class) parts.push(it.component_class);
-    if (it.cable_type) parts.push(it.cable_type);
-    if (it.fluid_type) parts.push(it.fluid_type);
+    if (it.component_class) parts.push(String(it.component_class));
+    if (it.cable_type) parts.push(String(it.cable_type));
+    if (it.fluid_type) parts.push(String(it.fluid_type));
     if (it.nominal_voltage_v != null) parts.push(`${it.nominal_voltage_v}V`);
-    if (it.chemistry) parts.push(it.chemistry);
-    if (it.insulation_color) parts.push(it.insulation_color);
-    if (it.action) parts.push(it.action);
-    if (Array.isArray(it.color)) parts.push(it.color.join('/'));
+    if (it.chemistry) parts.push(String(it.chemistry));
+    if (it.insulation_color) parts.push(String(it.insulation_color));
+    if (it.action) parts.push(String(it.action));
+    if (Array.isArray(it.color)) parts.push(it.color.map(String).join('/'));
     else if (it.color) parts.push(String(it.color));
     return parts.join(' ') || 'item';
   });
 }
 
-function monitoringSummaries(
-  items: FireMonitoringRequirement[] | null | undefined
-): string[] | undefined {
-  if (!items || items.length === 0) return undefined;
-  return items.map((m) => {
-    if (m.source_text) return m.source_text;
-    if (m.description) {
-      return m.minimum_duration_hours != null
-        ? `${m.description} (${m.minimum_duration_hours}h)`
-        : m.description;
-    }
-    if (m.parameter) {
-      return m.minimum_duration_hours != null
-        ? `${m.parameter} (${m.minimum_duration_hours}h)`
-        : m.parameter;
-    }
+function monitoringSummaries(items: unknown): string[] | undefined {
+  const list = asList(items);
+  if (list.length === 0) return undefined;
+  return list.map((m) => {
+    const text = pickText(m, ['source_text', 'text']);
+    if (text) return text;
+    if (!isPlainObject(m)) return 'monitoring';
+    const description = asTrimmedString(m.description);
+    const parameter = asTrimmedString(m.parameter);
+    const hours = typeof m.minimum_duration_hours === 'number' ? m.minimum_duration_hours : null;
+    if (description) return hours != null ? `${description} (${hours}h)` : description;
+    if (parameter) return hours != null ? `${parameter} (${hours}h)` : parameter;
     return 'monitoring';
   });
 }
 
-function actionOrTextList(
-  items: Array<{ action?: string | null; source_text?: string | null }> | null | undefined
-): string[] | undefined {
-  if (!items || items.length === 0) return undefined;
-  return items.map((it) => it.source_text || it.action || 'item').filter(Boolean);
+function actionOrTextList(items: unknown): string[] | undefined {
+  const list = asList(items);
+  if (list.length === 0) return undefined;
+  return list
+    .map((it) => pickText(it, ['source_text', 'text', 'description', 'content', 'action']) || 'item')
+    .filter(Boolean);
 }
 
-function warningSummaries(warnings: WarningEntry[] | null | undefined): string[] | undefined {
-  if (!warnings || warnings.length === 0) return undefined;
-  return warnings.map((w) => w.source_text || w.warning_id || w.hazard_type || 'warning');
+function warningSummaries(warnings: unknown): string[] | undefined {
+  const list = asList(warnings);
+  if (list.length === 0) return undefined;
+  return list.map(
+    (w) => pickText(w, ['source_text', 'text', 'warning_id', 'hazard_type']) || 'warning'
+  );
 }
 
-function accessMethodSummaries(
-  methods: Array<{
-    source_text?: string | null;
-    access_target?: string | null;
-    access_direction?: string | null;
-    power_state?: string | null;
-    action?: string | null;
-  }> | null | undefined
-): string[] | undefined {
-  if (!methods || methods.length === 0) return undefined;
-  return methods.map((m) => {
-    if (m.source_text) return m.source_text;
-    if (m.action) return m.action;
-    const parts = [m.access_target, m.access_direction, m.power_state].filter(Boolean);
+function accessMethodSummaries(methods: unknown): string[] | undefined {
+  const list = asList(methods);
+  if (list.length === 0) return undefined;
+  return list.map((m) => {
+    const text = pickText(m, ['source_text', 'text', 'action']);
+    if (text) return text;
+    if (!isPlainObject(m)) return 'access';
+    const parts = [m.access_target, m.access_direction, m.power_state]
+      .map(asTrimmedString)
+      .filter((x): x is string => Boolean(x));
     return parts.join(' / ') || 'access';
   });
 }
@@ -146,16 +184,18 @@ function accessMethodSummaries(
  * Stabilization / lift legend rows.
  * Prefer source_text; else "color meaning" (space, not colon) so Exact can include color tokens.
  */
-function zoneSummaries(
-  zones: Array<{ color_code?: string | null; meaning?: string | null; source_text?: string | null; component_class?: string | null }> | null | undefined
-): string[] | undefined {
-  if (!zones || zones.length === 0) return undefined;
-  return zones.map((z) => {
-    const text = typeof z.source_text === 'string' ? z.source_text.trim() : '';
+function zoneSummaries(zones: unknown): string[] | undefined {
+  const list = asList(zones);
+  if (list.length === 0) return undefined;
+  return list.map((z) => {
+    const text = pickText(z, ['source_text', 'text', 'label']);
     if (text) return text;
-    if (z.color_code && z.meaning) return `${z.color_code} ${z.meaning}`.trim();
-    if (z.meaning) return z.meaning;
-    return z.component_class || z.color_code || 'zone';
+    if (!isPlainObject(z)) return 'zone';
+    const color = asTrimmedString(z.color_code);
+    const meaning = asTrimmedString(z.meaning);
+    if (color && meaning) return `${color} ${meaning}`.trim();
+    if (meaning) return meaning;
+    return asTrimmedString(z.component_class) || color || 'zone';
   });
 }
 
@@ -210,13 +250,9 @@ export function project(record: RescueSheetV1): Projection {
       'responder_information.disable_direct_hazards.ordered_steps',
       stepActions(disable.ordered_steps)
     );
-    const frl = disable.first_responder_loop as { action?: string; source_text?: string } | null | undefined;
-    if (frl?.source_text || frl?.action) {
-      pushScalar(
-        out,
-        'responder_information.disable_direct_hazards.first_responder_loop',
-        frl.source_text || frl.action
-      );
+    const frlText = pickText(disable.first_responder_loop, ['source_text', 'text', 'action']);
+    if (frlText) {
+      pushScalar(out, 'responder_information.disable_direct_hazards.first_responder_loop', frlText);
     }
   }
 
@@ -235,7 +271,7 @@ export function project(record: RescueSheetV1): Projection {
     );
   }
   // Legacy v1.0 free-form access
-  pushArray(out, 'responder_information.access', ri.access ?? undefined);
+  pushArray(out, 'responder_information.access', stringList(ri.access));
 
   // Stored energy / fluids
   const stored = ri.stored_energy_fluids_gases_solids;
@@ -272,12 +308,16 @@ export function project(record: RescueSheetV1): Projection {
       actionOrTextList(fire.prohibitions)
     );
     {
-      const suppression = (fire.suppression_cooling_actions ?? [])
-        .map(
-          (a) =>
-            a.source_text ||
-            [a.action, a.target, a.application_direction].filter(Boolean).join(' ')
-        )
+      const suppression = asList(fire.suppression_cooling_actions)
+        .map((a) => {
+          const text = pickText(a, ['source_text', 'text', 'description']);
+          if (text) return text;
+          if (!isPlainObject(a)) return null;
+          const parts = [a.action, a.target, a.application_direction]
+            .map(asTrimmedString)
+            .filter((x): x is string => Boolean(x));
+          return parts.join(' ') || null;
+        })
         .filter((s): s is string => Boolean(s));
       pushArray(out, 'responder_information.fire.suppression_cooling_actions', suppression);
     }
@@ -286,44 +326,38 @@ export function project(record: RescueSheetV1): Projection {
       'responder_information.fire.monitoring_requirements',
       monitoringSummaries(fire.monitoring_requirements)
     );
-    if (fire.reignition_risk?.source_text != null || fire.reignition_risk?.risk_present != null) {
-      pushScalar(
-        out,
-        'responder_information.fire.reignition_risk',
-        fire.reignition_risk.source_text ??
-          (fire.reignition_risk.risk_present ? 'true' : 'false')
-      );
+    if (fire.reignition_risk != null) {
+      const riskText = pickText(fire.reignition_risk, ['source_text', 'text']);
+      if (riskText) {
+        pushScalar(out, 'responder_information.fire.reignition_risk', riskText);
+      } else if (isPlainObject(fire.reignition_risk) && fire.reignition_risk.risk_present != null) {
+        pushScalar(
+          out,
+          'responder_information.fire.reignition_risk',
+          fire.reignition_risk.risk_present ? 'true' : 'false'
+        );
+      }
     }
-    pushArray(out, 'responder_information.fire.extinguishing_agents', fire.extinguishing_agents ?? undefined);
+    pushArray(out, 'responder_information.fire.extinguishing_agents', stringList(fire.extinguishing_agents));
   }
 
   // Submersion
   const sub = ri.submersion ?? record.submersion;
   if (sub) {
     pushArray(out, 'responder_information.submersion.ordered_steps', stepActions(sub.ordered_steps));
-    pushArray(out, 'responder_information.submersion.guidance', sub.guidance ?? undefined);
-    if (sub.hazard_note) pushScalar(out, 'responder_information.submersion.hazard_note', sub.hazard_note);
-    const drain = sub.drainage_lift_requirement as
-      | {
-          purpose?: string;
-          approximate_lift_height_cm?: number;
-          vehicle_end_to_raise?: string;
-          source_text?: string;
-        }
-      | null
-      | undefined;
+    pushArray(out, 'responder_information.submersion.guidance', stringList(sub.guidance));
+    const hazardNote = asTrimmedString(sub.hazard_note);
+    if (hazardNote) pushScalar(out, 'responder_information.submersion.hazard_note', hazardNote);
+    const drain = sub.drainage_lift_requirement;
     if (drain) {
-      const drainText =
-        typeof drain.source_text === 'string' && drain.source_text.trim()
-          ? drain.source_text.trim()
-          : null;
+      const drainText = pickText(drain, ['source_text', 'text']);
       if (drainText) {
         pushScalar(out, 'responder_information.submersion.drainage_lift_requirement', drainText);
-      } else {
+      } else if (isPlainObject(drain)) {
         const parts = [
-          drain.vehicle_end_to_raise,
+          asTrimmedString(drain.vehicle_end_to_raise),
           drain.approximate_lift_height_cm != null ? `${drain.approximate_lift_height_cm}cm` : null,
-          drain.purpose,
+          asTrimmedString(drain.purpose),
         ].filter(Boolean);
         if (parts.length) {
           pushScalar(out, 'responder_information.submersion.drainage_lift_requirement', parts.join(' '));
@@ -335,14 +369,10 @@ export function project(record: RescueSheetV1): Projection {
   // Towing / transport / storage
   const tow = ri.towing_transport_storage ?? record.towing_transport_storage;
   if (tow) {
-    pushArray(out, 'responder_information.towing_transport_storage.guidance', tow.guidance ?? undefined);
-    const method = tow.transport_method as { required_method?: string; source_text?: string } | null | undefined;
-    if (method?.source_text || method?.required_method) {
-      pushScalar(
-        out,
-        'responder_information.towing_transport_storage.transport_method',
-        method.source_text || method.required_method
-      );
+    pushArray(out, 'responder_information.towing_transport_storage.guidance', stringList(tow.guidance));
+    const methodText = pickText(tow.transport_method, ['source_text', 'text', 'required_method']);
+    if (methodText) {
+      pushScalar(out, 'responder_information.towing_transport_storage.transport_method', methodText);
     }
     pushArray(
       out,
@@ -350,20 +380,11 @@ export function project(record: RescueSheetV1): Projection {
       actionOrTextList(tow.prohibited_methods)
     );
     // Pre-transport checks (sheet green info box — not a red warning box).
-    const preChecks = tow.pre_transport_checks as
-      | Array<{ parameter?: string; source_text?: string }>
-      | null
-      | undefined;
-    if (preChecks?.length) {
-      const texts = preChecks
-        .map((c) => {
-          const t = typeof c.source_text === 'string' ? c.source_text.trim() : '';
-          return t || (c.parameter ? String(c.parameter) : '');
-        })
-        .filter(Boolean);
-      if (texts.length) {
-        pushArray(out, 'responder_information.towing_transport_storage.pre_transport_checks', texts);
-      }
+    const preCheckTexts = asList(tow.pre_transport_checks)
+      .map((c) => pickText(c, ['source_text', 'text', 'parameter']))
+      .filter((t): t is string => Boolean(t));
+    if (preCheckTexts.length) {
+      pushArray(out, 'responder_information.towing_transport_storage.pre_transport_checks', preCheckTexts);
     }
     // post_incident_storage: keep in rich gold only for v1. The red-box wording is
     // scored under `warnings` (no double Exact). Section-scoped GT can reintroduce it later.
@@ -371,11 +392,12 @@ export function project(record: RescueSheetV1): Projection {
 
   // Silent vehicle / identification
   const silent = ri.identification_recognition?.silent_vehicle_warning;
-  if (silent?.source_text || silent?.hazard_type) {
+  const silentText = pickText(silent, ['source_text', 'text', 'hazard_type']);
+  if (silentText) {
     pushScalar(
       out,
       'responder_information.identification_recognition.silent_vehicle_warning',
-      silent.source_text || silent.hazard_type
+      silentText
     );
   }
 
@@ -386,18 +408,30 @@ export function project(record: RescueSheetV1): Projection {
     pushArray(
       out,
       'vehicle_layout.structural_zones',
-      (layout.structural_zones ?? []).map(
-        (z) => z.source_text || [z.zone_class, z.location_descriptor].filter(Boolean).join(' @ ')
-      ).filter(Boolean) as string[]
+      asList(layout.structural_zones)
+        .map((z) => {
+          const text = pickText(z, ['source_text', 'text']);
+          if (text) return text;
+          if (!isPlainObject(z)) return null;
+          return [z.zone_class, z.location_descriptor].filter(Boolean).join(' @ ') || null;
+        })
+        .filter((s): s is string => Boolean(s))
     );
     pushArray(
       out,
       'vehicle_layout.glazing',
-      (layout.glazing ?? []).map((g) => {
-        if (g.source_text) return g.source_text;
-        const locs = (g.glazing_locations ?? []).join(', ');
-        return g.glazing_type ? `${locs}: ${g.glazing_type}` : locs;
-      }).filter(Boolean) as string[]
+      asList(layout.glazing)
+        .map((g) => {
+          const text = pickText(g, ['source_text', 'text']);
+          if (text) return text;
+          if (!isPlainObject(g)) return null;
+          const locs = Array.isArray(g.glazing_locations)
+            ? g.glazing_locations.map(String).join(', ')
+            : '';
+          const type = asTrimmedString(g.glazing_type);
+          return type ? `${locs}: ${type}` : locs || null;
+        })
+        .filter((s): s is string => Boolean(s))
     );
   }
 
@@ -408,11 +442,13 @@ export function project(record: RescueSheetV1): Projection {
   if (!out['vehicle.propulsion.high_voltage_battery'] && record.high_voltage_systems) {
     const hv = record.high_voltage_systems;
     pushScalar(out, 'high_voltage_systems.nominal_voltage_v', hv.nominal_voltage_v);
-    pushArray(out, 'high_voltage_systems.disconnect', hv.disconnect ?? undefined);
+    pushArray(out, 'high_voltage_systems.disconnect', stringList(hv.disconnect));
     pushArray(
       out,
       'high_voltage_systems.cables',
-      hv.cables?.map((c) => c.description)
+      asList(hv.cables)
+        .map((c) => pickText(c, ['description', 'source_text', 'text']))
+        .filter((s): s is string => Boolean(s))
     );
   }
 

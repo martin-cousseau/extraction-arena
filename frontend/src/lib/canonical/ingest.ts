@@ -317,9 +317,37 @@ export function ingestToCanonical(input: IngestInput): IngestResult {
   };
 }
 
+/** True when golden keys are the canonical projection paths scoring expects. */
+export function goldenUsesProjectedPaths(golden: GoldenDataset | undefined): boolean {
+  const keys = Object.keys(golden?.golden_extraction ?? {});
+  if (keys.length === 0) return true;
+  return keys.some(
+    (k) =>
+      k.startsWith('vehicle.') ||
+      k.startsWith('responder_information.') ||
+      k.startsWith('vehicle_layout.') ||
+      k === 'warnings'
+  );
+}
+
+/**
+ * Scoring reads `golden`, not `canonical`. If a migrated dataset still has the
+ * pre-v1 Tesla bag (undotted `airbag`, `coolant`, …) while extracts project
+ * canonical paths, every field scores as missing (100% precision, 0% recall).
+ */
+export function alignDatasetGolden(rec: DatasetRecord): DatasetRecord {
+  if (!rec.canonical || goldenUsesProjectedPaths(rec.golden)) return rec;
+  const golden = goldenProjection(rec.canonical);
+  return {
+    ...rec,
+    golden,
+    fieldCount: Object.keys(golden.golden_extraction).length,
+  };
+}
+
 /**
  * Migrate a pre-v1 dataset record (no `canonical`) to the new shape.
- * Non-destructive: original `golden` is preserved for legacy records.
+ * Original paste stays on `rawSource`; `golden` is the derived projection.
  */
 export function migrateLegacyDataset(
   rec: DatasetMeta & { pages: PageImage[]; golden: GoldenDataset } & Record<string, unknown>
@@ -331,10 +359,11 @@ export function migrateLegacyDataset(
     recordId: rec.id,
     sourceFormat: 'legacy_golden',
   });
-  return {
+  return alignDatasetGolden({
     ...rec,
     canonical: ingested.canonical,
-    golden: rec.golden,
+    golden: ingested.golden,
+    fieldCount: Object.keys(ingested.golden.golden_extraction).length,
     rawSource: ingested.rawSource,
-  };
+  });
 }
