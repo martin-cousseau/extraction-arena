@@ -31,7 +31,13 @@ import {
 import { PageHeader, Surface } from '@/app/layout';
 import { humanLabel, type DatasetRecord } from '@/lib/dataset';
 import { loadDataset, loadRun } from '@/lib/db';
-import { resolveFieldJudge, sortByPriority, type JudgeVerdict } from '@/lib/evaluation';
+import {
+  evaluateDataset,
+  evaluationUsesGoldenKeys,
+  resolveFieldJudge,
+  sortByPriority,
+  type JudgeVerdict,
+} from '@/lib/evaluation';
 import { PIPELINES } from '@/lib/harness';
 import { LLAMA_EXTRACT_TIER_LABELS } from '@/pipelines/llamaparse/tiers';
 import { formatCost, formatMs, formatPct } from '@/lib/utils';
@@ -114,6 +120,7 @@ export function RunDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const storeRun = useAppStore((s) => s.runs.find((r) => r.id === id));
+  const upsertRun = useAppStore((s) => s.upsertRun);
   const [run, setRun] = useState(storeRun);
   const active = useAppStore((s) => s.active);
   const [dataset, setDataset] = useState<DatasetRecord | null>(
@@ -144,6 +151,19 @@ export function RunDetailPage() {
       cancelled = true;
     };
   }, [run?.datasetId, active]);
+
+  useEffect(() => {
+    if (!run || run.status !== 'completed' || !run.evaluation || !dataset?.golden) return;
+    if (evaluationUsesGoldenKeys(run.evaluation, dataset.golden)) return;
+    const evaluation = evaluateDataset(
+      run.data ?? {},
+      dataset.golden,
+      dataset.fieldEvalConfigs ?? {}
+    );
+    const updated = { ...run, evaluation };
+    setRun(updated);
+    void upsertRun(updated);
+  }, [run, dataset, upsertRun]);
 
   const golden = dataset?.golden ?? null;
   const { analyze, judging, error: judgeError, canAnalyze, hasKey } = useJudgeRun(run, golden);

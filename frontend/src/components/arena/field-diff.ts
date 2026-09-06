@@ -67,6 +67,28 @@ export function buildFieldDiffRows(
   const rows: FieldDiffRow[] = [];
   const usedModel = new Set<number>();
 
+  // Persisted runs scored one-sided absent lists with empty alignments.
+  // Rebuild missing/extra rows from the values so the panel isn't blank.
+  if (field.alignments.length === 0) {
+    for (let i = 0; i < goldItems.length; i++) {
+      rows.push({
+        status: 'missing',
+        expected: displayItem(goldItems[i]!, field.kind),
+        goldenIndex: i,
+        similarity: 0,
+      });
+    }
+    for (let j = 0; j < modelItems.length; j++) {
+      rows.push({
+        status: 'extra',
+        actual: displayItem(modelItems[j]!, field.kind),
+        modelIndex: j,
+        similarity: 0,
+      });
+    }
+    return rows;
+  }
+
   for (const alignment of field.alignments) {
     const expectedText = goldItems[alignment.goldenIndex];
     const actualText =
