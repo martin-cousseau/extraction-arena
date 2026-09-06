@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowUpSLine, RiEyeLine } from '@remixicon/react';
 import { FileUpload } from '@/components/base/file-upload/file-upload';
 import { Chip } from '@/components/base/badges/chip';
 import { Pagination } from '@/components/base/pagination/pagination';
@@ -9,14 +9,17 @@ import { PageHeader, Surface } from '@/app/layout';
 import { convertPdfToPages } from '@/lib/api';
 import type { DatasetRecord } from '@/lib/dataset';
 import { validate } from '@/lib/canonical/validate';
+import { GoldenShowcasePanel } from '@/components/application/golden-preview/golden-showcase-panel';
 import { EvalConfigPanel } from '@/pages/golden-config-page';
 import { GroundTruthPanel } from '@/pages/ground-truth-page';
 import { useAppStore } from '@/store';
 
-type DatasetTab = 'ground-truth' | 'config';
+type DatasetTab = 'ground-truth' | 'showcase' | 'config';
 
 function tabFromPath(pathname: string): DatasetTab {
-  return pathname.endsWith('/config') ? 'config' : 'ground-truth';
+  if (pathname.endsWith('/config')) return 'config';
+  if (pathname.endsWith('/showcase')) return 'showcase';
+  return 'ground-truth';
 }
 
 export function DatasetPage() {
@@ -142,18 +145,32 @@ export function DatasetPage() {
         selectedKey={tab}
         onSelectionChange={(key) => {
           if (!id) return;
-          const next: DatasetTab = String(key) === 'config' ? 'config' : 'ground-truth';
+          const keyStr = String(key);
+          const next: DatasetTab =
+            keyStr === 'config' ? 'config' : keyStr === 'showcase' ? 'showcase' : 'ground-truth';
           if (next === tab) return;
           setTab(next);
-          navigate(next === 'config' ? `/datasets/${id}/config` : `/datasets/${id}/ground-truth`);
+          const path =
+            next === 'config'
+              ? `/datasets/${id}/config`
+              : next === 'showcase'
+                ? `/datasets/${id}/showcase`
+                : `/datasets/${id}/ground-truth`;
+          navigate(path);
         }}
       >
         <TabList aria-label="Dataset views">
           <Tab id="ground-truth">Ground Truth</Tab>
+          <Tab id="showcase" icon={RiEyeLine} count={active.fieldCount}>
+            Showcase
+          </Tab>
           <Tab id="config">Eval Config</Tab>
         </TabList>
         <TabPanel id="ground-truth">
           <GroundTruthPanel dataset={active} />
+        </TabPanel>
+        <TabPanel id="showcase">
+          <GoldenShowcasePanel dataset={active} />
         </TabPanel>
         <TabPanel id="config">
           <EvalConfigPanel dataset={active} />
