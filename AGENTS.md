@@ -8,14 +8,14 @@ The native pipeline is **DocAI** (LlamaExtract). GLM-5V-Turbo, GPT-5.4 mini, and
 
 Two independent Node projects (not a workspace). The root `package.json` only has convenience scripts (`npm run dev` starts both).
 
-- `backend/` — Express + TypeScript. `POST /api/extract` (PDF→PNG at 300 DPI), `POST /api/llm` (vision proxy), `POST /api/pipelines/docai` (LlamaExtract).
-- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4 + BoardUI. Datasets and runs in IndexedDB; scoring in `lib/evaluation/`. Extraction pipelines live in `frontend/src/pipelines/` (one folder per pipeline: schema, adapter, logo; shared launch UI).
+- `backend/` — Express + TypeScript. `POST /api/extract` (PDF→PNG at 300 DPI), `POST /api/llm` (vision proxy), `POST /api/pipelines/docai` (LlamaExtract), `POST /api/pipelines/docai/jobs/delete` (drop LlamaExtract jobs when a run or dataset is deleted).
+- `frontend/` — Vite + React 19 + TypeScript + Tailwind v4 + BoardUI. Datasets and runs sync through the backend store (`/api/store`, `backend/data/arena`) so every browser on this machine shares them; IndexedDB is the per-browser cache. Scoring stays in `lib/evaluation/`. Extraction pipelines live in `frontend/src/pipelines/` (one folder per pipeline: schema, adapter, logo; shared launch UI).
 
 ## Backend
 
 Do not call providers from the browser. Do not put scoring in the backend.
 
-- **DocAI:** `LLAMA_CLOUD_API_KEY` lives on the backend. Optional session override is sent as `x-llama-api-key` and is never stored.
+- **DocAI:** `LLAMA_CLOUD_API_KEY` lives on the backend. Optional session override is sent as `x-llama-api-key` and is never stored. Deleting a dataset or run also deletes that run’s LlamaExtract jobs (`DELETE /api/v2/extract/{job_id}` via the backend).
 - **Deprecated vision:** `VITE_*` keys stay client-side and are forwarded through `/api/llm` because those providers omit CORS.
 
 ## Canonical contract
@@ -37,7 +37,7 @@ Per dataset (`lib/canonical/ingest.ts`):
 
 Validation (`canonical/validate.ts`) never throws; problems are `Issue[]`. Evidence is page-level (`location_descriptor`), not bounding boxes. Lifecycle is metadata + rules (`canonical/lifecycle.ts`); there is no review-queue UI.
 
-A dataset is created via **Create Dataset** (name → PDF → golden JSON) and stored in IndexedDB (`lib/db.ts`, DB v3: original `pdfBlob` + `runs`). The extraction prompt (`buildCanonicalPrompt`) still sends the empty v1.1 skeleton for vision adapters — never golden answers. LlamaParse (`pipelines/llamaparse`, run id `docai`) posts its own domain-only JSON Schema (`llamaExtractDataSchema`). Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
+A dataset is created via **Create Dataset** (name → PDF → golden JSON) and persisted by `lib/db.ts` (IndexedDB cache + backend `data/arena` share). The extraction prompt (`buildCanonicalPrompt`) still sends the empty v1.1 skeleton for vision adapters — never golden answers. LlamaParse (`pipelines/llamaparse`, run id `docai`) posts its own domain-only JSON Schema (`llamaExtractDataSchema`). Scoring still only compares paths present on this dataset’s projection. Pre-v1 datasets migrate lazily on load.
 
 Details: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/README.md).
 
