@@ -1,6 +1,11 @@
+import { useMemo, useState } from 'react';
+import { Focusable } from 'react-aria-components';
+import { RiSortAlphabetAsc, RiSortAsc } from '@remixicon/react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { TooltipContentProps } from 'recharts';
 
+import { Button } from '@/components/base/buttons/button';
+import { Tooltip as Hint, TooltipTrigger } from '@/components/base/tooltip/tooltip';
 import { humanLabel } from '@/lib/dataset';
 import {
   aggregateBySection,
@@ -33,6 +38,16 @@ type ChartPoint = {
   fill: string;
   hint?: string;
 };
+
+export type SectionChartOrder = 'normal' | 'value-asc';
+
+export function orderSectionPoints<T extends { value: number; label: string }>(
+  points: T[],
+  order: SectionChartOrder,
+): T[] {
+  if (order === 'normal' || points.length < 2) return points;
+  return [...points].sort((a, b) => a.value - b.value || a.label.localeCompare(b.label));
+}
 
 function sectionMean(section: SectionAggregate, metric: MetricKey): number {
   if (metric === 'precision') return section.meanPrecision;
@@ -117,7 +132,7 @@ function MiniBarChart({
   const maxValue = Math.max(1, ...data.map((d) => d.value));
   const numericMax = valueKind === 'percent' ? 1 : Math.max(1, Math.ceil(maxValue * 1.15));
   const isVertical = layout === 'vertical';
-  const height = isVertical ? Math.min(176, Math.max(88, data.length * 28)) : 96;
+  const height = isVertical ? Math.min(320, Math.max(88, data.length * 22)) : 96;
   const numericTicks = {
     type: 'number' as const,
     domain: [0, numericMax] as [number, number],
@@ -179,6 +194,42 @@ function MiniBarChart({
   );
 }
 
+function SectionOrderToggle({
+  title,
+  order,
+  onToggle,
+}: {
+  title: string;
+  order: SectionChartOrder;
+  onToggle: () => void;
+}) {
+  const valueSorted = order === 'value-asc';
+  const label = valueSorted
+    ? `Restore ${title} section order`
+    : `Sort ${title} sections from low to high`;
+  return (
+    <TooltipTrigger delay={200}>
+      <Focusable>
+        <Button
+          iconOnly
+          size="xs"
+          variant={valueSorted ? 'secondary' : 'ghost'}
+          leadingIcon={valueSorted ? RiSortAlphabetAsc : RiSortAsc}
+          aria-label={label}
+          aria-pressed={valueSorted}
+          data-section-order={order}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
+          }}
+        />
+      </Focusable>
+      <Hint size="md">{label}</Hint>
+    </TooltipTrigger>
+  );
+}
+
 function MetricQualityCard({
   title,
   mean,
@@ -190,6 +241,12 @@ function MetricQualityCard({
   sections: ChartPoint[];
   bins: ChartPoint[];
 }) {
+  const [sectionOrder, setSectionOrder] = useState<SectionChartOrder>('normal');
+  const orderedSections = useMemo(
+    () => orderSectionPoints(sections, sectionOrder),
+    [sections, sectionOrder],
+  );
+
   return (
     <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-background-secondary-default px-4 pt-4 pb-3">
       <header className="flex items-baseline justify-between gap-2">
@@ -197,8 +254,20 @@ function MetricQualityCard({
         <p className="text-title-2-medium tabular-nums text-text-primary">{formatPct(mean)}</p>
       </header>
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-body-medium text-text-tertiary">By section</p>
-        <MiniBarChart data={sections} valueKind="percent" layout="vertical" ariaLabel={`${title} by section`} />
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-body-medium text-text-tertiary">By section</p>
+          <SectionOrderToggle
+            title={title}
+            order={sectionOrder}
+            onToggle={() => setSectionOrder((current) => (current === 'normal' ? 'value-asc' : 'normal'))}
+          />
+        </div>
+        <MiniBarChart
+          data={orderedSections}
+          valueKind="percent"
+          layout="vertical"
+          ariaLabel={`${title} by section${sectionOrder === 'value-asc' ? ', sorted from low to high' : ''}`}
+        />
       </div>
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-body-medium text-text-tertiary">Distribution</p>
