@@ -37,6 +37,8 @@ export interface RunRecord {
   status: RunStatus;
   startedAt: number;
   finishedAt: number | null;
+  /** Last persist time for cross-browser sync. */
+  updatedAt?: number;
   elapsedMs: number;
   usage: RunUsage;
   jobId?: string;

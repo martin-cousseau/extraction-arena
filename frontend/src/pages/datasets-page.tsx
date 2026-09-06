@@ -24,7 +24,7 @@ export function DatasetsPage() {
     <div>
       <PageHeader
         title="Datasets"
-        description="Each dataset is a PDF plus golden JSON, stored locally in IndexedDB."
+        description="Each dataset is a PDF plus golden JSON. The local backend shares them across browsers on this machine; this browser keeps a cache if the API is down."
         actions={
           <Button leadingIcon={RiAddLine} onClick={() => navigate('/datasets/new')}>
             Create dataset
