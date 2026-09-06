@@ -64,7 +64,11 @@ export function AppLayout() {
       ];
     }
     if (location.pathname.startsWith('/datasets/') && active) {
-      const tail = location.pathname.endsWith('/config') ? 'Eval config' : 'Ground truth';
+      const tail = location.pathname.endsWith('/config')
+        ? 'Eval config'
+        : location.pathname.endsWith('/showcase')
+          ? 'Showcase'
+          : 'Ground truth';
       return [
         { label: 'Datasets', href: '/datasets' },
         { label: active.name, href: `/datasets/${active.id}` },

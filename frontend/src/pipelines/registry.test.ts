@@ -21,11 +21,13 @@ describe('pipeline registry', () => {
     const schema = pipeline.dataSchema?.();
     expect(llamaExtractIncompatibilities(schema)).toEqual([]);
     expect(pipeline.extract).toBeTypeOf('function');
+    expect(pipeline.deleteJobs).toBeTypeOf('function');
     expect(pipeline.requiresPdf).toBe(true);
   });
 
   it('does not attach an extract schema to deprecated vision pipelines', () => {
     expect(getPipeline('glm').dataSchema).toBeUndefined();
+    expect(getPipeline('glm').deleteJobs).toBeUndefined();
     expect(getPipeline('gpt').kind).toBe('vision');
     expect(getPipeline('grok').requiresPdf).toBe(false);
   });

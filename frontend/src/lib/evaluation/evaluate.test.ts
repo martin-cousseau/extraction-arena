@@ -4,6 +4,7 @@ import {
   defaultConfigForField,
   evaluateDataset,
   evaluateField,
+  evaluationUsesGoldenKeys,
   exactBagMatch,
   exactSequenceMatch,
   histogramBins,
@@ -112,6 +113,28 @@ describe('absence', () => {
     expect(r.precision).toBe(1);
     expect(r.recall).toBe(0);
   });
+
+  it('missing ordered_steps still align each golden item as unmatched', () => {
+    const gold = [
+      'Wear appropriate PPE for water rescue.',
+      'Remove the vehicle from the water',
+      'continue with normal high voltage disabling',
+    ];
+    const r = evaluateField(
+      'not_found',
+      gold,
+      'responder_information.submersion.ordered_steps',
+      sequenceExact
+    );
+    expect(r.match).toBe(false);
+    expect(r.recall).toBe(0);
+    expect(r.precision).toBe(1);
+    expect(r.kind).toBe('array');
+    expect(r.goldenCount).toBe(3);
+    expect(r.modelCount).toBe(0);
+    expect(r.alignments).toHaveLength(3);
+    expect(r.alignments.every((a) => a.modelIndex == null)).toBe(true);
+  });
 });
 
 describe('smart defaults', () => {
@@ -140,6 +163,29 @@ describe('smart defaults', () => {
     const c = resolveFieldConfig('warnings', { listMode: 'sequence' });
     expect(c.listMode).toBe('sequence');
     expect(c.matchStrategy).toBe('partial');
+  });
+});
+
+describe('evaluationUsesGoldenKeys', () => {
+  it('detects a Tesla-bag evaluation against canonical gold', () => {
+    const golden: GoldenDataset = {
+      golden_extraction: {
+        'vehicle.manufacturer': { value: 'Tesla' },
+        'responder_information.submersion.ordered_steps': { value: ['Wear PPE'] },
+      },
+    };
+    const teslaEval = evaluateDataset(
+      { manufacturer: 'Tesla', submersion: ['Wear PPE'] },
+      { golden_extraction: { manufacturer: { value: 'Tesla' }, submersion: { value: ['Wear PPE'] } } },
+      {}
+    );
+    expect(evaluationUsesGoldenKeys(teslaEval, golden)).toBe(false);
+    const aligned = evaluateDataset(
+      { 'vehicle.manufacturer': 'Tesla' },
+      golden,
+      {}
+    );
+    expect(evaluationUsesGoldenKeys(aligned, golden)).toBe(true);
   });
 });
 

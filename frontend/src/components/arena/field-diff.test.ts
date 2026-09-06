@@ -70,6 +70,46 @@ describe('buildFieldDiffRows', () => {
     expect(rows[2]?.actual).toBe('Invented step');
   });
 
+  it('shows every golden step as missing when the model omitted the field', () => {
+    const expected = ['Wear appropriate PPE for water rescue.', 'Remove the vehicle from the water'];
+    const field = evaluateField(
+      'not_found',
+      expected,
+      'responder_information.submersion.ordered_steps',
+      sequenceExact
+    );
+    const rows = buildFieldDiffRows(field, expected, undefined);
+    expect(rows.map((r) => r.status)).toEqual(['missing', 'missing']);
+    expect(rows[0]?.expected).toBe(expected[0]);
+    expect(rows[1]?.actual).toBeUndefined();
+  });
+
+  it('renders golden list items as missing when alignments were not persisted', () => {
+    const expected = [
+      'Wear appropriate PPE for water rescue.',
+      'Remove the vehicle from the water',
+    ];
+    const field = {
+      key: 'responder_information.submersion.ordered_steps',
+      label: 'Submersion · Ordered Steps',
+      kind: 'array' as const,
+      config: sequenceExact,
+      match: false,
+      partial: 0,
+      precision: 1,
+      recall: 0,
+      f1: 0,
+      alignments: [],
+      modelExtraCount: 0,
+      goldenCount: 1,
+      modelCount: 0,
+    };
+    const rows = buildFieldDiffRows(field, expected, undefined);
+    expect(rows.map((r) => r.status)).toEqual(['missing', 'missing']);
+    expect(rows[0]?.expected).toBe(expected[0]);
+    expect(rows[1]?.expected).toBe(expected[1]);
+  });
+
   it('shows unmatched set items as extras', () => {
     const field = evaluateField(
       ['battery fire', 'made up hazard'],

@@ -9,6 +9,7 @@ import {
   listDatasets,
   listRuns,
   loadDataset,
+  loadRun,
   saveDataset,
   saveRun,
   updateDataset,
@@ -26,7 +27,19 @@ import {
   DEFAULT_LLAMA_EXTRACT_TIER,
   type LlamaExtractTier,
 } from './pipelines/llamaparse/tiers';
+import { purgePipelineJobsForRuns } from './pipelines/purge-jobs';
 import { dismissNotificationsForRun } from './lib/notifications';
+
+async function cleanupRemoteJobs(
+  runs: Array<Pick<RunRecord, 'pipelineId' | 'jobId'>>,
+  llamaKey: string
+): Promise<void> {
+  try {
+    await purgePipelineJobsForRuns(runs, { llamaKey });
+  } catch (error) {
+    console.warn('[arena] remote extract job cleanup failed', error);
+  }
+}
 
 export type ConvertStatus = 'idle' | 'converting' | 'ready' | 'error';
 
@@ -252,6 +265,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   removeDataset: async (id) => {
+    const persisted = await listRuns(id);
+    const persistedIds = new Set(persisted.map((run) => run.id));
+    const unsaved = get().runs.filter((run) => run.datasetId === id && !persistedIds.has(run.id));
+    const runs = [...persisted, ...unsaved];
+    for (const run of runs) {
+      markRunRemoved(run.id);
+      dismissNotificationsForRun(run.id);
+    }
     await deleteDataset(id);
     set((s) => {
       const { [id]: _omitCtx, ...restCtx } = s.customContexts;
@@ -260,9 +281,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         active: s.active?.id === id ? null : s.active,
         customContexts: restCtx,
         metricConfigs: restCfg,
+        runs: s.runs.filter((run) => run.datasetId !== id),
+        inFlightRunId: runs.some((run) => run.id === s.inFlightRunId) ? null : s.inFlightRunId,
       };
     });
     await get().loadCatalog();
+    await cleanupRemoteJobs(runs, get().llamaKey);
   },
 
   selectDataset: async (id) => {
@@ -314,28 +338,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ runs });
   },
   upsertRun: async (run) => {
-    if (isRunRemoved(run.id)) return;
-    await saveRun(run);
+    if (isRunRemoved(run.id)) {
+      await cleanupRemoteJobs([run], get().llamaKey);
+      return;
+    }
+    const saved = await saveRun(run);
     if (isRunRemoved(run.id)) {
       await deleteRun(run.id);
+      await cleanupRemoteJobs([run], get().llamaKey);
       return;
     }
     set((s) => {
       const rest = s.runs.filter((r) => r.id !== run.id);
       return {
-        runs: [run, ...rest].sort((a, b) => b.startedAt - a.startedAt),
+        runs: [saved, ...rest].sort((a, b) => b.startedAt - a.startedAt),
         inFlightRunId: run.status === 'running' ? run.id : s.inFlightRunId === run.id ? null : s.inFlightRunId,
       };
     });
   },
   removeRun: async (id) => {
     markRunRemoved(id);
+    const run = get().runs.find((r) => r.id === id) ?? (await loadRun(id));
     await deleteRun(id);
     dismissNotificationsForRun(id);
     set((s) => ({
       runs: s.runs.filter((r) => r.id !== id),
       inFlightRunId: s.inFlightRunId === id ? null : s.inFlightRunId,
     }));
+    if (run) await cleanupRemoteJobs([run], get().llamaKey);
   },
   attachPdf: async (blob, pdfName) => {
     const active = get().active;

@@ -16,7 +16,7 @@
 
 Eval harness for document extraction pipelines scored against a per-document golden dataset. Upload a PDF, paste its golden JSON, then run **LlamaParse** (LlamaExtract; persisted run id `docai`). GLM-5V-Turbo, GPT-5.4 mini, and Grok 4.5 remain as deprecated vision adapters. Each field is scored against a versioned `rescue-sheet-ev-v1.1` record.
 
-Datasets and runs live in the browser (IndexedDB) and survive restarts. Scoring never leaves the client.
+Datasets and runs are stored on the local backend (`backend/data/arena`) so Safari, Brave, and Chrome share the same records. Each browser also caches them in IndexedDB if the API is down. Scoring never leaves the client.
 
 The seed document is Tesla’s public 4-page [Cybertruck rescue sheet](https://digitalassets.tesla.com/tesla-contents/image/upload/Cybertruck-Rescue-Sheet.pdf). The structured gold is on [Hugging Face](https://huggingface.co/datasets/martincousseau/Cybertruck-Rescue-Sheet). Walkthrough: [YouTube](https://youtu.be/QXWN8WyvPmI). Fixture wording taken from that sheet remains Tesla’s.
 
@@ -28,7 +28,7 @@ The seed document is Tesla’s public 4-page [Cybertruck rescue sheet](https://d
 - Expand a field on the run page for an alignment-aware diff (sequence vs set)
 - Optionally run a GPT-5.4 mini judge. Uplift can raise field scores; the qualitative insights brief never rewrites them
 - Plot weekly extraction score and run volume on the dashboard
-- Delete a run, including one still extracting — in-flight work is aborted
+- Delete a dataset or run locally; in-flight work is aborted and LlamaParse extract jobs are removed from Llama Cloud
 
 ## Quick start
 
@@ -43,7 +43,7 @@ npm run dev
 ```
 
 - Frontend → http://localhost:5173
-- Backend → http://localhost:3001 (`POST /api/extract`, `POST /api/llm`, `POST /api/pipelines/docai`)
+- Backend → http://localhost:3001 (`POST /api/extract`, `POST /api/llm`, `POST /api/pipelines/docai`, `POST /api/pipelines/docai/jobs/delete`)
 
 Or run them separately: `npm run dev --prefix backend` and `npm run dev --prefix frontend`.
 

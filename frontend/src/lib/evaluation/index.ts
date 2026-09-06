@@ -46,6 +46,7 @@ export {
   scoreBand,
   accuracyBand,
   sectionOfKey,
+  evaluationUsesGoldenKeys,
   aggregateBySection,
   histogramBins,
   sortByPriority,

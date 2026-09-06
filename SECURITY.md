@@ -15,8 +15,8 @@ Include the affected path, a short reproduction, and impact (for example: secret
 
 ## What this app stores
 
-- API keys entered in Settings stay in the browser session. They are not written to IndexedDB.
+- API keys entered in Settings stay in the browser session. They are not written to IndexedDB or the backend store.
 - An optional Llama Cloud override is sent as `x-llama-api-key` and is never stored on the server.
-- Datasets (including the original PDF) and run records live in IndexedDB on the user’s machine.
+- Datasets (including the original PDF) and run records are cached in IndexedDB and synced to `backend/data/arena` so every browser on this machine shares them. Do not copy that directory off-box.
 
 Do not commit `.env` files, `VITE_*` keys, or `LLAMA_CLOUD_API_KEY`.

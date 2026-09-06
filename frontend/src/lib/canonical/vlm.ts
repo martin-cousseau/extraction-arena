@@ -21,9 +21,125 @@ const DOMAIN_SECTIONS = [
   'towing_transport_storage',
 ] as const;
 
+const EXTRACT_WRAPPER_KEYS = ['data', 'extract_result', 'extraction', 'result', 'output'] as const;
+
+function isDomainPayload(v: unknown): v is Record<string, unknown> {
+  return isPlainObject(v) && ('vehicle' in v || 'responder_information' in v);
+}
+
+/**
+ * LlamaExtract `extract_result` is a domain object for `per_doc`, or an array
+ * for `per_page` / `per_table_row`. Some payloads also wrap the domain body.
+ */
+function unwrapExtractPayload(modelJson: unknown): unknown {
+  if (typeof modelJson === 'string') {
+    const trimmed = modelJson.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return unwrapExtractPayload(JSON.parse(trimmed) as unknown);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+  if (Array.isArray(modelJson)) {
+    return modelJson.map((item) => unwrapExtractPayload(item));
+  }
+  if (!isPlainObject(modelJson)) return {};
+  if (isDomainPayload(modelJson)) return modelJson;
+  for (const key of EXTRACT_WRAPPER_KEYS) {
+    if (modelJson[key] == null) continue;
+    const inner = unwrapExtractPayload(modelJson[key]);
+    if (isDomainPayload(inner) || (Array.isArray(inner) && inner.some(isDomainPayload))) {
+      return inner;
+    }
+  }
+  return modelJson;
+}
+
+function leafString(v: unknown): string | null {
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t ? t : null;
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  if (isPlainObject(v) && typeof v.value === 'string' && !('source_text' in v) && !('action' in v)) {
+    return leafString(v.value);
+  }
+  return null;
+}
+
+function coerceOrderedSteps(raw: unknown): OrderedStep[] {
+  const list = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+  const steps: OrderedStep[] = [];
+  list.forEach((item, i) => {
+    if (typeof item === 'string') {
+      const text = item.trim();
+      if (!text) return;
+      steps.push({ step_number: i + 1, action: '', source_text: text });
+      return;
+    }
+    if (!isPlainObject(item)) return;
+    const source_text =
+      leafString(item.source_text) ??
+      leafString(item.text) ??
+      leafString(item.description) ??
+      leafString(item.content) ??
+      leafString(item.instruction) ??
+      leafString(item.step) ??
+      leafString(item.value);
+    const action = leafString(item.action) ?? '';
+    if (!source_text && !action) return;
+    const step_number =
+      typeof item.step_number === 'number' && Number.isFinite(item.step_number)
+        ? item.step_number
+        : i + 1;
+    steps.push({
+      step_number,
+      action,
+      ...(source_text ? { source_text } : {}),
+      ...(typeof item.condition === 'string' ? { condition: item.condition } : {}),
+      ...(typeof item.lift_height_cm === 'number' ? { lift_height_cm: item.lift_height_cm } : {}),
+      ...(typeof item.source_equivalent_imperial === 'string'
+        ? { source_equivalent_imperial: item.source_equivalent_imperial }
+        : {}),
+    });
+  });
+  return steps;
+}
+
+function coerceExtractTree(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(coerceExtractTree);
+  if (!isPlainObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'ordered_steps') out[key] = coerceOrderedSteps(child);
+    else if (key === 'warnings' && Array.isArray(child)) {
+      out[key] = child.map((w) => {
+        if (typeof w === 'string' && w.trim()) return { source_text: w.trim() };
+        return coerceExtractTree(w);
+      });
+    } else {
+      out[key] = coerceExtractTree(child);
+    }
+  }
+  return out;
+}
+
 /** Coerce arbitrary parsed model JSON into a canonical draft. Never throws. */
 export function normalizeVlmToDraft(modelJson: unknown, ctx: SourceContext): RescueSheetV1Draft {
-  const src = isPlainObject(modelJson) ? modelJson : {};
+  const payload = unwrapExtractPayload(modelJson);
+  if (Array.isArray(payload)) {
+    const drafts = payload.filter((item) => item != null && item !== '').map((item) =>
+      normalizeVlmToDraft(item, ctx)
+    );
+    if (drafts.length === 0) return normalizeVlmToDraft({}, ctx);
+    return mergeDrafts(drafts);
+  }
+
+  const coerced = coerceExtractTree(payload);
+  const src = isPlainObject(coerced) ? coerced : {};
 
   const draft: RescueSheetV1Draft = {
     ...makeEnvelope(ctx, {

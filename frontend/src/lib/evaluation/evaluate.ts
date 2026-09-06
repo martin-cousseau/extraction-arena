@@ -195,20 +195,25 @@ export function evaluateField(
 
   const mAbsent = isAbsentValue(modelValue);
   const gAbsent = isAbsentValue(goldenValue);
-  if (mAbsent || gAbsent) {
-    return { ...base, ...evaluateAbsent(mAbsent, gAbsent) };
+  if (mAbsent && gAbsent) {
+    return { ...base, ...evaluateAbsent(true, true) };
   }
 
   if (kind === 'string') {
+    if (mAbsent || gAbsent) {
+      return { ...base, ...evaluateAbsent(mAbsent, gAbsent) };
+    }
     return {
       ...base,
       ...evaluateScalar(String(modelValue), String(goldenValue), fieldKey, config),
     };
   }
 
-  // Objects default to set-of-pairs; listMode still respected if sequence.
-  const modelItems = toItems(modelValue, kind);
-  const goldenItems = toItems(goldenValue, kind);
+  // One-sided absence still aligns list items so the run view can render
+  // missing/extra rows. `not_found` must not go through toItems (it would
+  // become a single "not_found" item).
+  const modelItems = mAbsent ? [] : toItems(modelValue, kind);
+  const goldenItems = gAbsent ? [] : toItems(goldenValue, kind);
   return {
     ...base,
     ...evaluateItems(modelItems, goldenItems, config),
@@ -293,10 +298,22 @@ export function accuracyBand(accuracy: number): 'red' | 'yellow' | 'green' {
   return 'red';
 }
 
-/** Group field keys by top-level path segment. */
+/** Group field keys by procedure / top-level path segment. */
 export function sectionOfKey(key: string): string {
   if (!key.includes('.')) return key;
-  return key.split('.')[0] ?? key;
+  const parts = key.split('.');
+  if (parts[0] === 'responder_information' && parts[1]) return parts[1];
+  return parts[0] ?? key;
+}
+
+/** False when a stored run was scored against a different golden key set. */
+export function evaluationUsesGoldenKeys(
+  evaluation: { perField: Array<{ key: string }> },
+  golden: GoldenDataset
+): boolean {
+  const keys = new Set(Object.keys(golden.golden_extraction));
+  if (keys.size === 0 || evaluation.perField.length === 0) return true;
+  return evaluation.perField.some((field) => keys.has(field.key));
 }
 
 export interface SectionAggregate {

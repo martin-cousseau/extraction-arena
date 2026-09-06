@@ -79,3 +79,52 @@ function asNumber(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
+
+function uniqueJobIds(jobIds: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of jobIds) {
+    const jobId = raw.trim();
+    if (!jobId || seen.has(jobId)) continue;
+    seen.add(jobId);
+    out.push(jobId);
+  }
+  return out;
+}
+
+/**
+ * Delete LlamaExtract jobs on Llama Cloud via the backend proxy.
+ * Local run/dataset delete still proceeds if this fails.
+ */
+export async function deleteLlamaparseJobs(
+  jobIds: string[],
+  options: { llamaKey?: string } = {}
+): Promise<void> {
+  const ids = uniqueJobIds(jobIds);
+  if (ids.length === 0) return;
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (options.llamaKey?.trim()) {
+    headers['x-llama-api-key'] = options.llamaKey.trim();
+  }
+
+  const res = await fetch('/api/pipelines/docai/jobs/delete', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ jobIds: ids }),
+  });
+  const body = (await res.json().catch(() => ({ error: res.statusText }))) as {
+    error?: string;
+    results?: Array<{ jobId?: string; deleted?: boolean; error?: string }>;
+  };
+  if (!res.ok) {
+    throw new Error(body.error ?? `LlamaParse job delete failed (HTTP ${res.status})`);
+  }
+
+  const failed = (body.results ?? []).filter((row) => row && row.deleted === false);
+  if (failed.length > 0) {
+    throw new Error(
+      `LlamaParse job delete failed for ${failed.map((row) => row.jobId ?? '?').join(', ')}`
+    );
+  }
+}

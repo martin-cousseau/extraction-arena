@@ -36,6 +36,8 @@ export interface DatasetMeta {
   pageCount: number;
   fieldCount: number;
   createdAt: number;
+  /** Last persist time. Used to merge this browser’s IndexedDB with the shared backend store. */
+  updatedAt?: number;
 }
 
 /**
