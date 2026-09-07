@@ -66,8 +66,9 @@ interface AppState {
 
   selectedPipeline: PipelineId;
   llamaExtractTier: LlamaExtractTier;
+  lastLaunchDatasetId: string | null;
   runs: RunRecord[];
-  inFlightRunId: string | null;
+  inFlightRunIds: string[];
   customContexts: Record<string, string>;
 
   /**
@@ -136,6 +137,7 @@ interface AppState {
   setLlamaKey: (k: string) => void;
   setSelectedPipeline: (id: PipelineId) => void;
   setLlamaExtractTier: (tier: LlamaExtractTier) => void;
+  setLastLaunchDatasetId: (id: string | null) => void;
   loadRuns: (datasetId?: string) => Promise<void>;
   upsertRun: (run: RunRecord) => Promise<void>;
   removeRun: (id: string) => Promise<void>;
@@ -188,8 +190,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectedPipeline: DEFAULT_PIPELINE_ID,
   llamaExtractTier: DEFAULT_LLAMA_EXTRACT_TIER,
+  lastLaunchDatasetId: null,
   runs: [],
-  inFlightRunId: null,
+  inFlightRunIds: [],
 
   customContexts: {},
 
@@ -282,7 +285,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         customContexts: restCtx,
         metricConfigs: restCfg,
         runs: s.runs.filter((run) => run.datasetId !== id),
-        inFlightRunId: runs.some((run) => run.id === s.inFlightRunId) ? null : s.inFlightRunId,
+        inFlightRunIds: s.inFlightRunIds.filter((runId) => !runs.some((run) => run.id === runId)),
       };
     });
     await get().loadCatalog();
@@ -333,6 +336,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLlamaKey: (llamaKey) => set({ llamaKey }),
   setSelectedPipeline: (selectedPipeline) => set({ selectedPipeline }),
   setLlamaExtractTier: (llamaExtractTier) => set({ llamaExtractTier }),
+  setLastLaunchDatasetId: (lastLaunchDatasetId) => set({ lastLaunchDatasetId }),
   loadRuns: async (datasetId) => {
     const runs = await listRuns(datasetId);
     set({ runs });
@@ -352,7 +356,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rest = s.runs.filter((r) => r.id !== run.id);
       return {
         runs: [saved, ...rest].sort((a, b) => b.startedAt - a.startedAt),
-        inFlightRunId: run.status === 'running' ? run.id : s.inFlightRunId === run.id ? null : s.inFlightRunId,
+        inFlightRunIds:
+          run.status === 'running' || run.status === 'queued'
+            ? s.inFlightRunIds.includes(run.id)
+              ? s.inFlightRunIds
+              : [...s.inFlightRunIds, run.id]
+            : s.inFlightRunIds.filter((id) => id !== run.id),
       };
     });
   },
@@ -363,7 +372,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     dismissNotificationsForRun(id);
     set((s) => ({
       runs: s.runs.filter((r) => r.id !== id),
-      inFlightRunId: s.inFlightRunId === id ? null : s.inFlightRunId,
+      inFlightRunIds: s.inFlightRunIds.filter((runId) => runId !== id),
     }));
     if (run) await cleanupRemoteJobs([run], get().llamaKey);
   },

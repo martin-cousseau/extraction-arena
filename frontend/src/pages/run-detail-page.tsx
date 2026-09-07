@@ -38,10 +38,17 @@ import {
   sortByPriority,
   type JudgeVerdict,
 } from '@/lib/evaluation';
-import { PIPELINES } from '@/lib/harness';
+import {
+  abortInFlightRun,
+  downloadRunTraces,
+  isTickingRun,
+  liveElapsedMs,
+  PIPELINES,
+} from '@/lib/harness';
 import { LLAMA_EXTRACT_TIER_LABELS } from '@/pipelines/llamaparse/tiers';
 import { formatCost, formatMs, formatPct } from '@/lib/utils';
 import { useJudgeRun } from '@/hooks/useJudgeRun';
+import { useNow } from '@/hooks/use-live-elapsed';
 import { useAppStore } from '@/store';
 import { cx } from '@/utils/cx';
 
@@ -167,6 +174,9 @@ export function RunDetailPage() {
 
   const golden = dataset?.golden ?? null;
   const { analyze, judging, error: judgeError, canAnalyze, hasKey } = useJudgeRun(run, golden);
+  const ticking = Boolean(run && isTickingRun(run.status));
+  const now = useNow(ticking);
+  const durationMs = run ? liveElapsedMs(run, now) : 0;
 
   const fields = useMemo(
     () => (run?.evaluation ? sortByPriority(run.evaluation.perField) : []),
@@ -201,7 +211,7 @@ export function RunDetailPage() {
       return [
         { icon: RiPercentLine, label: 'Score', value: '—', delta: run?.status ?? '', deltaColor: 'neutral' },
         { icon: RiCheckboxCircleLine, label: 'Exact', value: '—', delta: 'Waiting', deltaColor: 'neutral' },
-        { icon: RiTimeLine, label: 'Duration', value: run ? formatMs(run.elapsedMs) : '—', delta: '', deltaColor: 'neutral' },
+        { icon: RiTimeLine, label: 'Duration', value: run ? formatMs(durationMs) : '—', delta: '', deltaColor: 'neutral' },
         { icon: RiMoneyDollarCircleLine, label: 'Cost', value: run ? formatCost(run.usage.costUsd) : '—', delta: '', deltaColor: 'neutral' },
       ];
     }
@@ -223,7 +233,7 @@ export function RunDetailPage() {
       {
         icon: RiTimeLine,
         label: 'Duration',
-        value: formatMs(run.elapsedMs),
+        value: formatMs(durationMs),
         delta: new Date(run.startedAt).toLocaleString(),
         deltaColor: 'neutral',
       },
@@ -235,7 +245,7 @@ export function RunDetailPage() {
         deltaColor: 'neutral',
       },
     ];
-  }, [run]);
+  }, [run, durationMs]);
 
   const qualityStats: Stat[] | null = useMemo(() => {
     if (!run?.evaluation) return null;
@@ -276,15 +286,7 @@ export function RunDetailPage() {
 
   const pipeline = PIPELINES[run.pipelineId];
 
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(run, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `run-${run.id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportJson = () => downloadRunTraces([run]);
 
   return (
     <div>
@@ -293,7 +295,9 @@ export function RunDetailPage() {
         description={`Started ${new Date(run.startedAt).toLocaleString()}${dataset ? ` · ${dataset.name}` : ''}${run.jobId ? ` · job ${run.jobId}` : ''}`}
         actions={
           <>
-            <Chip color={pipeline.deprecated ? 'yellow' : 'blue'}>{pipeline.deprecated ? 'Deprecated' : 'Native'}</Chip>
+            <Chip color={pipeline.kind === 'native' ? 'blue' : 'cyan'}>
+              {pipeline.kind === 'native' ? 'Native' : 'Vision'}
+            </Chip>
             {run.extractTier ? (
               <Chip color="soft">{LLAMA_EXTRACT_TIER_LABELS[run.extractTier]}</Chip>
             ) : null}
@@ -317,6 +321,11 @@ export function RunDetailPage() {
             >
               {run.judgeInsights ? 'Re-analyze with judge' : 'Analyze with judge'}
             </Button>
+            {run.status === 'running' ? (
+              <Button variant="secondary" size="small" onClick={() => abortInFlightRun(run.id)}>
+                Cancel
+              </Button>
+            ) : null}
             <Button variant="secondary" size="small" onClick={exportJson}>
               Export
             </Button>
@@ -330,7 +339,7 @@ export function RunDetailPage() {
       />
       {run.status === 'running' && (
         <div className="mb-4">
-          <AgentThinking variant="infinity" label="Extracting" />
+          <AgentThinking variant="infinity" label="Extracting" startedAt={run.startedAt} />
         </div>
       )}
       {judging && (

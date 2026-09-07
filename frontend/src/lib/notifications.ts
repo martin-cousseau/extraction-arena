@@ -22,6 +22,7 @@ export interface AppNotification {
   chip?: NotificationChip;
   runId: string;
   autoDismissDuration?: number;
+  cancellable?: boolean;
 }
 
 type Listener = () => void;
@@ -103,5 +104,6 @@ export function runProgressNotification(
     status: 'information',
     chip: runStatusChip(phase),
     runId,
+    cancellable: true,
   };
 }

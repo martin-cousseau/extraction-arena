@@ -21,11 +21,15 @@ export {
   executePipelineRun,
   failRun,
   isCompletedEvalRun,
+  isTickingRun,
+  liveElapsedMs,
   type RunProgressPhase,
 } from './run';
 export {
+  abortInFlightRun,
   isRunRemoved,
   markRunRemoved,
   registerInFlightRun,
   unregisterInFlightRun,
 } from './inflight';
+export { downloadRunTraces, runTraceFilename, serializeRunTraces } from './download-run';
