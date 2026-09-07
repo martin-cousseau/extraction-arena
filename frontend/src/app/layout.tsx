@@ -50,9 +50,11 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
   const active = useAppStore((s) => s.active);
+  const datasets = useAppStore((s) => s.datasets);
+  const catalogLoading = useAppStore((s) => s.catalogLoading);
   const loadCatalog = useAppStore((s) => s.loadCatalog);
   const loadRuns = useAppStore((s) => s.loadRuns);
-  const { run, cancel, running } = useRunHarness();
+  const { run } = useRunHarness();
   const selected = selectedKey(location.pathname);
 
   const crumbs = useMemo(() => {
@@ -137,19 +139,20 @@ export function AppLayout() {
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <Clock />
-            {running ? (
-              <Button variant="secondary" onClick={cancel}>
-                Cancel
-              </Button>
-            ) : (
-              <Button
-                leadingIcon={RiPlayFill}
-                disabled={!active}
-                onClick={() => setLaunchOpen(true)}
-              >
-                Run Extraction Arena
-              </Button>
-            )}
+            <Button
+              leadingIcon={RiPlayFill}
+              disabled={datasets.length === 0}
+              title={
+                catalogLoading
+                  ? 'Loading datasets…'
+                  : datasets.length === 0
+                    ? 'Create a dataset first.'
+                    : undefined
+              }
+              onClick={() => setLaunchOpen(true)}
+            >
+              Run Extraction Arena
+            </Button>
           </div>
         </header>
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-8 lg:px-6">
@@ -162,9 +165,9 @@ export function AppLayout() {
       <LaunchRunModal
         isOpen={launchOpen}
         onClose={() => setLaunchOpen(false)}
-        onLaunch={(pipelineId, options) => {
+        onLaunch={(datasetId, pipelineId, options) => {
           setLaunchOpen(false);
-          void run(pipelineId, options);
+          void run(pipelineId, { ...options, datasetId });
         }}
       />
     </div>

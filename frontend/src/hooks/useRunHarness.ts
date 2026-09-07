@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { isAbortError } from '@/lib/api';
+import { loadDataset } from '@/lib/db';
 import {
   createRunningRecord,
   executePipelineRun,
@@ -23,31 +24,32 @@ import { useAppStore } from '@/store';
 
 const DONE_DISMISS_MS = 8000;
 
+export interface LaunchRunOptions {
+  llamaTier?: LlamaExtractTier;
+  datasetId?: string;
+}
+
 export function useRunHarness() {
-  const [running, setRunning] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
   const upsertRun = useAppStore((s) => s.upsertRun);
 
-  const cancel = useCallback(() => {
-    controllerRef.current?.abort();
-  }, []);
-
   const run = useCallback(
-    async (pipelineId?: PipelineId, extractOptions?: { llamaTier?: LlamaExtractTier }) => {
+    async (pipelineId?: PipelineId, extractOptions?: LaunchRunOptions) => {
       const state = useAppStore.getState();
-      const active = state.active;
-      if (!active) throw new Error('No dataset selected.');
+      const datasetId =
+        extractOptions?.datasetId ?? state.lastLaunchDatasetId ?? state.active?.id ?? null;
+      if (!datasetId) throw new Error('No dataset selected.');
+      const record = await loadDataset(datasetId);
+      if (!record) throw new Error('Dataset not found.');
+
       const id = pipelineId ?? state.selectedPipeline;
       getPipeline(id);
       const llamaTier = id === 'docai' ? extractOptions?.llamaTier ?? state.llamaExtractTier : undefined;
       const controller = new AbortController();
-      controllerRef.current = controller;
-      const draft = createRunningRecord(active.id, id, llamaTier);
+      const draft = createRunningRecord(record.id, id, llamaTier);
       const startId = runStartNotificationId(draft.id);
       const doneId = runDoneNotificationId(draft.id);
-      const documentName = active.name;
+      const documentName = record.name;
       registerInFlightRun(draft.id, controller);
-      setRunning(true);
       try {
         await upsertRun(draft);
         if (isRunRemoved(draft.id)) return null;
@@ -55,15 +57,15 @@ export function useRunHarness() {
         const result = await executePipelineRun({
           pipelineId: id,
           input: {
-            datasetId: active.id,
-            pdfName: active.pdfName,
-            pdfBlob: active.pdfBlob,
-            pages: active.pages,
-            canonical: active.canonical,
+            datasetId: record.id,
+            pdfName: record.pdfName,
+            pdfBlob: record.pdfBlob,
+            pages: record.pages,
+            canonical: record.canonical,
             signal: controller.signal,
           },
-          configMap: state.metricConfigs[active.id] ?? {},
-          golden: active.golden,
+          configMap: state.metricConfigs[record.id] ?? record.fieldEvalConfigs ?? {},
+          golden: record.golden,
           visionKeys: {
             zaiKey: state.zaiKey,
             openaiKey: state.openaiKey,
@@ -90,7 +92,7 @@ export function useRunHarness() {
           id: doneId,
           title: 'Run completed',
           description:
-            score != null ? `${active.name} · extraction score ${score}` : `${active.name} finished.`,
+            score != null ? `${record.name} · extraction score ${score}` : `${record.name} finished.`,
           status: 'success',
           chip: runStatusChip('completed'),
           runId: draft.id,
@@ -108,7 +110,7 @@ export function useRunHarness() {
           pushNotification({
             id: doneId,
             title: 'Run cancelled',
-            description: active.name,
+            description: record.name,
             status: 'neutral',
             chip: runStatusChip('cancelled'),
             runId: draft.id,
@@ -119,7 +121,7 @@ export function useRunHarness() {
         pushNotification({
           id: doneId,
           title: 'Run failed',
-          description: failed.error ?? `${active.name} did not finish.`,
+          description: failed.error ?? `${record.name} did not finish.`,
           status: 'error',
           chip: runStatusChip('failed'),
           runId: draft.id,
@@ -128,12 +130,10 @@ export function useRunHarness() {
         return null;
       } finally {
         unregisterInFlightRun(draft.id);
-        setRunning(false);
-        if (controllerRef.current === controller) controllerRef.current = null;
       }
     },
     [upsertRun]
   );
 
-  return { run, cancel, running };
+  return { run };
 }

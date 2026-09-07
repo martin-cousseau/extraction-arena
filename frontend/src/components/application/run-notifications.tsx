@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Chip } from '@/components/base/badges/chip';
 import { Notification, NotificationViewport } from '@/components/base/notification/notification';
+import { abortInFlightRun } from '@/lib/harness';
 import {
   dismissNotification,
   getNotifications,
@@ -45,6 +46,15 @@ export function RunNotifications() {
                 navigate(`/runs/${toast.runId}`);
               },
             },
+            ...(toast.cancellable
+              ? [
+                  {
+                    label: 'Cancel',
+                    variant: 'secondary' as const,
+                    onClick: () => abortInFlightRun(toast.runId),
+                  },
+                ]
+              : []),
           ]}
         />
       ))}

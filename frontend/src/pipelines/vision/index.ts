@@ -1,20 +1,22 @@
-import { PlaceholderLogo } from '../shared/placeholder-logo';
+import type { ComponentType } from 'react';
 import type { PipelineDefinition } from '../types';
 import { runVisionExtract } from './adapter';
+import { OpenAiLogo, XaiLogo, ZaiLogo } from './logos';
 
 function visionPipeline(
   id: 'glm' | 'gpt' | 'grok',
   label: string,
-  description: string
+  description: string,
+  Logo: ComponentType<{ className?: string }>
 ): PipelineDefinition {
   return {
     id,
     label,
     description,
-    deprecated: true,
+    deprecated: false,
     kind: 'vision',
     requiresPdf: false,
-    Logo: PlaceholderLogo,
+    Logo,
     extract: (input, options) => runVisionExtract(id, input, options),
   };
 }
@@ -22,17 +24,20 @@ function visionPipeline(
 export const glmPipeline = visionPipeline(
   'glm',
   'GLM-5V-Turbo',
-  'Deprecated vision pipeline via Z.AI.'
+  'Z.AI vision extraction via GLM-5V-Turbo.',
+  ZaiLogo
 );
 
 export const gptPipeline = visionPipeline(
   'gpt',
   'GPT-5.4 mini',
-  'Deprecated vision pipeline via OpenAI.'
+  'OpenAI vision extraction via GPT-5.4 mini.',
+  OpenAiLogo
 );
 
 export const grokPipeline = visionPipeline(
   'grok',
   'Grok 4.5',
-  'Deprecated vision pipeline via xAI.'
+  'xAI vision extraction via Grok 4.5.',
+  XaiLogo
 );

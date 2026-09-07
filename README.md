@@ -14,7 +14,7 @@
   <a href="https://youtu.be/QXWN8WyvPmI"><img src="docs/assets/youtube-logo.jpg" alt="YouTube" height="36" /></a>
 </p>
 
-Eval harness for document extraction pipelines scored against a per-document golden dataset. Upload a PDF, paste its golden JSON, then run **LlamaParse** (LlamaExtract; persisted run id `docai`). GLM-5V-Turbo, GPT-5.4 mini, and Grok 4.5 remain as deprecated vision adapters. Each field is scored against a versioned `rescue-sheet-ev-v1.1` record.
+Eval harness for document extraction pipelines scored against a per-document golden dataset. Upload a PDF, paste its golden JSON, then run **LlamaParse** (LlamaExtract; persisted run id `docai`) or a vision pipeline (GLM-5V-Turbo, GPT-5.4 mini, Grok 4.5). Each field is scored against a versioned `rescue-sheet-ev-v1.1` record.
 
 Datasets and runs are stored on the local backend (`backend/data/arena`) so Safari, Brave, and Chrome share the same records. Each browser also caches them in IndexedDB if the API is down. Scoring never leaves the client.
 
@@ -59,7 +59,7 @@ npm run typecheck # frontend + backend
 Hot-reload (Vite HMR + `tsx watch`). Source is bind-mounted, so edits apply without rebuilding:
 
 ```bash
-cp .env.example .env   # add LLAMA_CLOUD_API_KEY (and optional deprecated VITE_* keys)
+cp .env.example .env   # add LLAMA_CLOUD_API_KEY (and optional VITE_* vision keys)
 docker compose -f docker-compose.dev.yml up --build
 # or: npm run docker:dev
 ```
@@ -103,7 +103,7 @@ Agent / contributor conventions: [`AGENTS.md`](AGENTS.md). Canonical contract: [
 | Id | UI label | Kind | Status |
 |---|---|---|---|
 | `docai` | LlamaParse | Native LlamaExtract | Default |
-| `glm` / `gpt` / `grok` | GLM / GPT / Grok | Vision via `/api/llm` | Deprecated |
+| `glm` / `gpt` / `grok` | GLM / GPT / Grok | Vision via `/api/llm` | Launchable |
 
 LlamaParse posts its own domain-only JSON Schema (`llamaExtractDataSchema` in `frontend/src/pipelines/llamaparse/`). Vision adapters still receive the empty v1.1 skeleton — never golden answers. Cost for Llama uses official credits × `$1.25 / 1,000`. A null `usage.credits` is not treated as $0; the backend polls until billing lands.
 
@@ -143,9 +143,9 @@ Frontend (`frontend/.env`):
 
 | Var | Purpose |
 |---|---|
-| `VITE_OPENAI_API_KEY` | Semantic judge + insights on a completed run. Also the deprecated GPT vision adapter. |
-| `VITE_ZAI_API_KEY` | Deprecated GLM-5V-Turbo |
-| `VITE_XAI_API_KEY` | Deprecated Grok 4.5 |
+| `VITE_OPENAI_API_KEY` | Semantic judge + insights on a completed run, and the GPT vision pipeline. |
+| `VITE_ZAI_API_KEY` | GLM-5V-Turbo vision pipeline |
+| `VITE_XAI_API_KEY` | Grok 4.5 vision pipeline |
 
 Vite exposes `VITE_*` vars to the browser. Vision keys are forwarded through `/api/llm`. LlamaParse does not use them. An optional session override for Llama is sent as `x-llama-api-key` and is never stored.
 

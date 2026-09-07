@@ -7,7 +7,7 @@ import { evaluateDataset } from '../evaluation';
 import type { FieldEvalConfig } from '../evaluation/types';
 import { getPipeline } from '../../pipelines/registry';
 import type { LlamaExtractTier } from '../../pipelines/llamaparse/tiers';
-import type { PipelineId, PipelineRunInput, RunRecord } from './types';
+import type { PipelineId, PipelineRunInput, RunRecord, RunStatus } from './types';
 
 /** Live pipeline stages. Every adapter extracts, then the harness scores. */
 export type RunProgressPhase = 'extracting' | 'evaluating';
@@ -124,4 +124,19 @@ export function failRun(record: RunRecord, error: unknown, status: 'failed' | 'c
     elapsedMs: Date.now() - record.startedAt,
     error: message,
   };
+}
+
+export function isTickingRun(status: RunStatus): boolean {
+  return status === 'running' || status === 'queued';
+}
+
+/** Wall-clock elapsed for a live run; stored `elapsedMs` once the run has finished. */
+export function liveElapsedMs(
+  run: Pick<RunRecord, 'status' | 'startedAt' | 'elapsedMs'>,
+  now = Date.now()
+): number {
+  if (isTickingRun(run.status)) {
+    return Math.max(0, now - run.startedAt);
+  }
+  return run.elapsedMs;
 }

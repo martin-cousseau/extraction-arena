@@ -23,10 +23,16 @@ import {
 } from '@/components/base/table/table';
 import { PageHeader, Surface } from '@/app/layout';
 import { formatWeekTick, weekKey, weekStartsFromFirstToLast } from '@/lib/chart-weeks';
-import { isCompletedEvalRun, PIPELINES } from '@/lib/harness';
+import { isCompletedEvalRun, isTickingRun, liveElapsedMs, PIPELINES, type RunRecord } from '@/lib/harness';
+import { useNow } from '@/hooks/use-live-elapsed';
 import { LLAMA_EXTRACT_TIER_LABELS } from '@/pipelines/llamaparse/tiers';
 import { formatCost, formatMs } from '@/lib/utils';
 import { useAppStore } from '@/store';
+
+function LiveDuration({ run }: { run: RunRecord }) {
+  const now = useNow(isTickingRun(run.status), 1000);
+  return <>{formatMs(liveElapsedMs(run, now))}</>;
+}
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -106,7 +112,7 @@ export function DashboardPage() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Eval harness results: DocAI is the native pipeline. Vision models remain available as deprecated adapters."
+        description="Eval harness results across LlamaParse and vision pipelines."
       />
       <StatCards stats={stats} />
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -151,7 +157,7 @@ export function DashboardPage() {
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex flex-wrap items-center gap-1.5">
-                      <Chip color={PIPELINES[run.pipelineId].deprecated ? 'yellow' : 'blue'}>
+                      <Chip color={PIPELINES[run.pipelineId].kind === 'native' ? 'blue' : 'cyan'}>
                         {PIPELINES[run.pipelineId].label}
                       </Chip>
                       {run.extractTier ? (
@@ -170,7 +176,9 @@ export function DashboardPage() {
                   <TableCell className="tabular-nums">
                     {run.evaluation ? `${run.evaluation.extractionScore}` : '—'}
                   </TableCell>
-                  <TableCell className="tabular-nums">{formatMs(run.elapsedMs)}</TableCell>
+                  <TableCell className="tabular-nums">
+                    <LiveDuration run={run} />
+                  </TableCell>
                   <TableCell className="tabular-nums">{formatCost(run.usage.costUsd)}</TableCell>
                   <TableCell>
                     <DeleteRunButton

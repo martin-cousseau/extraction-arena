@@ -32,6 +32,8 @@ export interface AgentThinkingProps {
   shimmer?: boolean;
   /** Elapsed seconds since mount, rendered after the label. */
   showTimer?: boolean;
+  /** Epoch ms to count from. When omitted, the timer starts at mount. */
+  startedAt?: number;
   className?: string;
 }
 
@@ -218,17 +220,22 @@ function InfinityIndicator() {
 
 /* ------------------------------------------------------------------ timer */
 
-function ElapsedTimer() {
-  const [elapsed, setElapsed] = useState(0);
+function ElapsedTimer({ startedAt }: { startedAt?: number }) {
+  const [elapsed, setElapsed] = useState(() =>
+    startedAt != null ? Math.max(0, Date.now() - startedAt) / 1000 : 0,
+  );
 
   useEffect(() => {
-    const started = performance.now();
-    const id = window.setInterval(
-      () => setElapsed((performance.now() - started) / 1000),
-      100,
-    );
+    const origin = startedAt ?? performance.now();
+    const fromEpoch = startedAt != null;
+    const tick = () => {
+      const raw = fromEpoch ? Date.now() - origin : performance.now() - origin;
+      setElapsed(Math.max(0, raw) / 1000);
+    };
+    tick();
+    const id = window.setInterval(tick, 100);
     return () => window.clearInterval(id);
-  }, []);
+  }, [startedAt]);
 
   return (
     <span className="font-mono text-caption-1-regular text-text-tertiary tabular-nums">
@@ -245,6 +252,7 @@ export function AgentThinking({
   tone,
   shimmer = true,
   showTimer = true,
+  startedAt,
   className,
 }: AgentThinkingProps) {
   const color = TONE_COLORS[tone ?? VARIANT_TONE[variant]];
@@ -264,7 +272,7 @@ export function AgentThinking({
       >
         {label}
       </span>
-      {showTimer && <ElapsedTimer />}
+      {showTimer && <ElapsedTimer startedAt={startedAt} />}
     </div>
   );
 }

@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/base/buttons/button';
 import { CloseButton } from '@/components/base/buttons/close-button';
 import { RadioGroup } from '@/components/base/radio/radio';
+import { Select, SelectItem } from '@/components/base/select/select';
+import { loadDataset } from '@/lib/db';
+import type { DatasetRecord } from '@/lib/dataset';
 import { useAppStore } from '@/store';
 import { cx } from '@/utils/cx';
 import { getPipeline, LAUNCHABLE_PIPELINES, resolveLaunchable } from '../registry';
@@ -14,7 +17,7 @@ import { PipelineCard } from './pipeline-card';
 export interface LaunchRunModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLaunch: (pipelineId: PipelineId, options?: { llamaTier?: LlamaExtractTier }) => void;
+  onLaunch: (datasetId: string, pipelineId: PipelineId, options?: { llamaTier?: LlamaExtractTier }) => void;
 }
 
 /**
@@ -30,9 +33,17 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
   const [visible, setVisible] = useState(false);
   const unmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const datasets = useAppStore((s) => s.datasets);
   const active = useAppStore((s) => s.active);
+  const zaiKey = useAppStore((s) => s.zaiKey);
+  const openaiKey = useAppStore((s) => s.openaiKey);
+  const xaiKey = useAppStore((s) => s.xaiKey);
   const setSelectedPipeline = useAppStore((s) => s.setSelectedPipeline);
   const setLlamaExtractTier = useAppStore((s) => s.setLlamaExtractTier);
+  const setLastLaunchDatasetId = useAppStore((s) => s.setLastLaunchDatasetId);
+
+  const [datasetId, setDatasetId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<DatasetRecord | null>(null);
   const [pipelineId, setPipelineId] = useState<PipelineId>(() =>
     resolveLaunchable(useAppStore.getState().selectedPipeline),
   );
@@ -41,15 +52,30 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
   );
 
   const selected = getPipeline(resolveLaunchable(pipelineId));
-  const hasPdf = Boolean(active?.pdfBlob);
-  const canLaunch = !selected.requiresPdf || hasPdf;
-  const datasetName = active?.name ?? 'this dataset';
+  const hasPdf = Boolean(loaded?.pdfBlob);
+  const hasPages = (loaded?.pages.length ?? 0) > 0;
+  const missingKey =
+    selected.id === 'glm'
+      ? !zaiKey.trim()
+      : selected.id === 'gpt'
+        ? !openaiKey.trim()
+        : selected.id === 'grok'
+          ? !xaiKey.trim()
+          : false;
+  const canLaunch =
+    Boolean(datasetId && loaded) &&
+    (!selected.requiresPdf || hasPdf) &&
+    (selected.kind !== 'vision' || hasPages) &&
+    !missingKey;
+  const datasetName = loaded?.name ?? datasets.find((d) => d.id === datasetId)?.name ?? 'this dataset';
 
   useEffect(() => {
     if (isOpen) {
       if (unmountTimer.current) clearTimeout(unmountTimer.current);
-      setPipelineId(resolveLaunchable(useAppStore.getState().selectedPipeline));
-      setLlamaTier(resolveLlamaExtractTier(useAppStore.getState().llamaExtractTier));
+      const state = useAppStore.getState();
+      setPipelineId(resolveLaunchable(state.selectedPipeline));
+      setLlamaTier(resolveLlamaExtractTier(state.llamaExtractTier));
+      setDatasetId(state.lastLaunchDatasetId ?? state.active?.id ?? state.datasets[0]?.id ?? null);
       setMounted(true);
       requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
     } else {
@@ -60,6 +86,24 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
       if (unmountTimer.current) clearTimeout(unmountTimer.current);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !datasetId) {
+      setLoaded(null);
+      return;
+    }
+    if (active?.id === datasetId) {
+      setLoaded(active);
+      return;
+    }
+    let cancelled = false;
+    void loadDataset(datasetId).then((record) => {
+      if (!cancelled) setLoaded(record ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, datasetId, active]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -76,12 +120,25 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
   const launch = () => {
     const id = resolveLaunchable(pipelineId);
     const pipeline = getPipeline(id);
-    if (pipeline.requiresPdf && !hasPdf) return;
+    if (!datasetId || !loaded) return;
+    if (pipeline.requiresPdf && !loaded.pdfBlob) return;
+    if (pipeline.kind === 'vision' && loaded.pages.length === 0) return;
     setSelectedPipeline(id);
+    setLastLaunchDatasetId(datasetId);
     const tier = id === 'docai' ? llamaTier : undefined;
     if (tier) setLlamaExtractTier(tier);
-    onLaunch(id, tier ? { llamaTier: tier } : undefined);
+    onLaunch(datasetId, id, tier ? { llamaTier: tier } : undefined);
   };
+
+  const hint = !datasetId
+    ? 'Choose a dataset to run.'
+    : selected.requiresPdf && !hasPdf
+      ? `This dataset has no original PDF. Re-upload it on the dataset page to run ${selected.label}.`
+      : selected.kind === 'vision' && !hasPages
+        ? `This dataset has no converted pages. Open it and re-upload the PDF to run ${selected.label}.`
+        : missingKey
+          ? `Add the ${selected.label} API key in Settings.`
+          : null;
 
   return createPortal(
     <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="presentation">
@@ -92,7 +149,7 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
         onClick={onClose}
         className={cx(
           'absolute inset-0 cursor-default bg-black/70 transition-opacity duration-300 ease-out',
-          visible ? 'opacity-100' : 'opacity-0',
+          visible ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
       />
 
@@ -109,7 +166,7 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
           aria-labelledby={titleId}
           aria-describedby={canLaunch ? descId : `${descId} ${hintId}`}
           tabIndex={-1}
-          className="relative w-[440px] max-w-[calc(100vw-32px)] overflow-clip rounded-3xl bg-background-full shadow-xs outline-none"
+          className="relative w-[480px] max-w-[calc(100vw-32px)] overflow-clip rounded-3xl bg-background-full shadow-xs outline-none"
         >
           <form
             onSubmit={(event) => {
@@ -124,10 +181,26 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
               <CloseButton aria-label="Close pipeline picker" size="md" onClick={onClose} />
             </div>
 
-            <div className="flex flex-col gap-4 px-8 pb-4">
+            <div className="flex max-h-[min(70vh,640px)] flex-col gap-4 overflow-y-auto px-8 pb-4">
               <p id={descId} className="text-body-regular text-text-secondary">
-                Choose a pipeline for {datasetName}.
+                Choose a dataset and pipeline for {datasetName}.
               </p>
+
+              <Select
+                aria-label="Dataset"
+                selectedKey={datasetId ?? undefined}
+                onSelectionChange={(key) => {
+                  if (key != null) setDatasetId(String(key));
+                }}
+                className="w-full"
+                placeholder="Select a dataset"
+              >
+                {datasets.map((dataset) => (
+                  <SelectItem key={dataset.id} id={dataset.id} textValue={dataset.name}>
+                    {dataset.name}
+                  </SelectItem>
+                ))}
+              </Select>
 
               <RadioGroup
                 aria-label="Pipeline"
@@ -148,10 +221,9 @@ export function LaunchRunModal({ isOpen, onClose, onLaunch }: LaunchRunModalProp
                 ))}
               </RadioGroup>
 
-              {selected.requiresPdf && !hasPdf ? (
+              {hint ? (
                 <p id={hintId} className="text-body-regular text-text-error-primary">
-                  This dataset has no original PDF. Re-upload it on the dataset page to run{' '}
-                  {selected.label}.
+                  {hint}
                 </p>
               ) : null}
             </div>

@@ -2,7 +2,7 @@
 
 Extraction Arena is an eval harness for document extraction pipelines scored against a per-document golden dataset. Seed document: Tesla Cybertruck first-responder rescue sheet. Scoring, UI, persistence, and schemas use the canonical `rescue-sheet-ev-v1.1` record (rich ISO-17840-style domain + app envelope; v1.0 still migrates). Arbitrary JSON enters only through envelope-stamping, the Tesla adapter, or VLM/extract normalize.
 
-The native pipeline is **DocAI** (LlamaExtract). GLM-5V-Turbo, GPT-5.4 mini, and Grok 4.5 remain as **deprecated** vision adapters.
+The default pipeline is **DocAI** (LlamaExtract). GLM-5V-Turbo, GPT-5.4 mini, and Grok 4.5 are launchable vision adapters.
 
 ## Layout
 
@@ -16,7 +16,7 @@ Two independent Node projects (not a workspace). The root `package.json` only ha
 Do not call providers from the browser. Do not put scoring in the backend.
 
 - **DocAI:** `LLAMA_CLOUD_API_KEY` lives on the backend. Optional session override is sent as `x-llama-api-key` and is never stored. Deleting a dataset or run also deletes that run’s LlamaExtract jobs (`DELETE /api/v2/extract/{job_id}` via the backend).
-- **Deprecated vision:** `VITE_*` keys stay client-side and are forwarded through `/api/llm` because those providers omit CORS.
+- **Vision:** `VITE_*` keys stay client-side and are forwarded through `/api/llm` because those providers omit CORS.
 
 ## Canonical contract
 
@@ -50,7 +50,7 @@ Details: [`frontend/src/lib/canonical/README.md`](frontend/src/lib/canonical/REA
 - One evaluation engine (`lib/evaluation/`) on the flat projection. Exact, partial, and P/R/F1 share alignments. Array geometry is path-aware (`ordered_steps` → sequence; `warnings`/inventories → set). Never mock scores.
 - Exact prefers sheet-supported `source_text` over internal action/class IDs when both exist.
 - Pipeline JSON is always `normalizeVlmToDraft` → `validate` → `project` → `evaluateDataset`. Issues are surfaced, never thrown.
-- DocAI is the default pipeline. Vision adapters are deprecated, not deleted.
+- DocAI is the default pipeline. Vision adapters (GLM, GPT, Grok) are launchable.
 - Llama cost uses official credits × `$1.25 / 1,000`. Never treat a null `usage.credits` as $0; poll until billing lands.
 
 ## Sentinels
@@ -62,7 +62,7 @@ Absent scalar → `"not_found"`. Absent array → `[]`. Absent object → `{}`. 
 | Id | Kind | Status |
 |---|---|---|
 | `docai` | Native LlamaExtract (`tier` from launch radios: `cost_effective` / `agentic` / `agentic_plus` / `turbo`; `parse_tier: agentic`) | Default |
-| `glm` / `gpt` / `grok` | Vision via `/api/llm` | Deprecated |
+| `glm` / `gpt` / `grok` | Vision via `/api/llm` | Launchable |
 
 Vision calls: `temperature: 0`, `response_format: { type: "json_object" }`, prompt + one `image_url` per page.
 
