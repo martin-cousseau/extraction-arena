@@ -18,7 +18,7 @@ Eval harness for document extraction pipelines scored against a per-document gol
 
 Datasets and runs are stored on the local backend (`backend/data/arena`) so Safari, Brave, and Chrome share the same records. Each browser also caches them in IndexedDB if the API is down. Scoring never leaves the client.
 
-The seed document is Tesla’s public 4-page [Cybertruck rescue sheet](https://digitalassets.tesla.com/tesla-contents/image/upload/Cybertruck-Rescue-Sheet.pdf). The structured gold is on [Hugging Face](https://huggingface.co/datasets/martincousseau/Cybertruck-Rescue-Sheet). Walkthrough: [YouTube](https://youtu.be/QXWN8WyvPmI). Fixture wording taken from that sheet remains Tesla’s.
+The seed document is Tesla’s public 4-page [Cybertruck rescue sheet](https://digitalassets.tesla.com/tesla-contents/image/upload/Cybertruck-Rescue-Sheet.pdf). The structured gold is on [Hugging Face](https://huggingface.co/datasets/martincousseau/Cybertruck-Rescue-Sheet). Walkthrough: [YouTube](https://youtu.be/QXWN8WyvPmI). Write-up: [martincousseau.com/research/extraction-arena](https://martincousseau.com/research/extraction-arena). Fixture wording taken from that sheet remains Tesla’s.
 
 ## What you can do
 
